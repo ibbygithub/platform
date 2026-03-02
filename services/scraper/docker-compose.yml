@@ -1,0 +1,94 @@
+# Scraper service: Firecrawl (self-hosted) + platform wrapper API
+#
+# Firecrawl GitHub: https://github.com/mendableai/firecrawl
+# Check their repo for the latest self-hosted setup notes before deploying.
+#
+# Internal network isolates Firecrawl and Redis from platform_net.
+# Only scraper-api is exposed to Traefik.
+
+networks:
+  platform_net:
+    external: true
+    name: platform_net
+  scraper_internal:
+    driver: bridge
+
+services:
+
+  # ── Redis (Firecrawl job queue) ──────────────────────────────────────────────
+  scraper-redis:
+    image: redis:7-alpine
+    container_name: platform-scraper-redis
+    restart: unless-stopped
+    networks:
+      - scraper_internal
+
+  # ── Firecrawl API process ────────────────────────────────────────────────────
+  firecrawl-api:
+    image: ghcr.io/mendableai/firecrawl:latest
+    container_name: platform-firecrawl-api
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://scraper-redis:6379
+      - REDIS_RATE_LIMIT_URL=redis://scraper-redis:6379
+      - USE_DB_AUTHENTICATION=false
+      - PORT=3002
+      - FLY_PROCESS_GROUP=app
+      - NUM_WORKERS_PER_QUEUE=4
+    env_file:
+      - ./.env
+    depends_on:
+      - scraper-redis
+    networks:
+      - scraper_internal
+
+  # ── Firecrawl worker process ─────────────────────────────────────────────────
+  firecrawl-worker:
+    image: ghcr.io/mendableai/firecrawl:latest
+    container_name: platform-firecrawl-worker
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://scraper-redis:6379
+      - REDIS_RATE_LIMIT_URL=redis://scraper-redis:6379
+      - USE_DB_AUTHENTICATION=false
+      - PORT=3002
+      - FLY_PROCESS_GROUP=worker
+      - NUM_WORKERS_PER_QUEUE=4
+    env_file:
+      - ./.env
+    depends_on:
+      - scraper-redis
+    networks:
+      - scraper_internal
+
+  # ── Platform wrapper API (the only container on platform_net) ─────────────────
+  scraper-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: platform-scraper-api
+    container_name: platform-scraper-api
+    restart: unless-stopped
+    environment:
+      - FIRECRAWL_URL=http://firecrawl-api:3002
+    env_file:
+      - ./.env
+    depends_on:
+      - firecrawl-api
+    networks:
+      - platform_net
+      - scraper_internal
+
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=platform_net
+
+      - traefik.http.routers.scraper-http.entrypoints=web
+      - traefik.http.routers.scraper-http.rule=Host(`scrape.platform.ibbytech.com`)
+      - traefik.http.routers.scraper-http.service=scraper
+      - traefik.http.services.scraper.loadbalancer.server.port=8083
+
+      - traefik.http.routers.scraper-https.entrypoints=websecure
+      - traefik.http.routers.scraper-https.rule=Host(`scrape.platform.ibbytech.com`)
+      - traefik.http.routers.scraper-https.service=scraper
+      - traefik.http.routers.scraper-https.tls=true

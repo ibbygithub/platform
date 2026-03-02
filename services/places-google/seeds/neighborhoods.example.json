@@ -1,0 +1,24 @@
+[
+  {
+    "neighborhood_id": "example-downtown",
+    "city": "ExampleCity",
+    "country": "US",
+    "anchor": {
+      "lat": 40.7128,
+      "lng": -74.0060,
+      "address": "Downtown, ExampleCity, US"
+    },
+    "search_categories": ["restaurant", "cafe", "convenience_store"]
+  },
+  {
+    "neighborhood_id": "example-uptown",
+    "city": "ExampleCity",
+    "country": "US",
+    "anchor": {
+      "lat": 40.7831,
+      "lng": -73.9712,
+      "address": "Uptown, ExampleCity, US"
+    },
+    "search_categories": ["restaurant", "bar", "park"]
+  }
+]

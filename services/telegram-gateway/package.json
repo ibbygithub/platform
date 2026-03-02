@@ -1,0 +1,13 @@
+{
+  "name": "platform-telegram-gateway",
+  "version": "1.0.0",
+  "description": "Telegram bot ingress gateway for the platform",
+  "main": "gateway.js",
+  "scripts": {
+    "start": "node gateway.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "telegraf": "^4.16.3"
+  }
+}

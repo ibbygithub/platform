@@ -1,0 +1,33 @@
+networks:
+  platform_net:
+    external: true
+    name: platform_net
+
+services:
+  reddit-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: platform-reddit-gateway
+    container_name: platform-reddit-gateway
+    restart: unless-stopped
+
+    env_file:
+      - ./.env
+
+    networks:
+      - platform_net
+
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=platform_net
+
+      - traefik.http.routers.reddit-http.entrypoints=web
+      - traefik.http.routers.reddit-http.rule=Host(`reddit.platform.ibbytech.com`)
+      - traefik.http.routers.reddit-http.service=reddit
+      - traefik.http.services.reddit.loadbalancer.server.port=8082
+
+      - traefik.http.routers.reddit-https.entrypoints=websecure
+      - traefik.http.routers.reddit-https.rule=Host(`reddit.platform.ibbytech.com`)
+      - traefik.http.routers.reddit-https.service=reddit
+      - traefik.http.routers.reddit-https.tls=true

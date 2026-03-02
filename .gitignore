@@ -1,0 +1,32 @@
+# Secrets — never commit real credentials
+.env
+*.env.local
+
+# Certificates (managed outside git)
+infra/compose/traefik/certs/
+**/*.pem
+**/*.crt
+**/*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

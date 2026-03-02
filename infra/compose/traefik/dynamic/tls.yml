@@ -1,0 +1,17 @@
+# Traefik TLS configuration
+# Place your certificate files in infra/compose/traefik/certs/
+# (that directory is gitignored — manage certs manually on svcnode-01)
+#
+# For LAN / self-signed:
+#   Generate with: mkcert "*.platform.ibbytech.com"
+#   Then update the paths below.
+#
+# For public (Cloudflare):
+#   When Cloudflare Tunnel is active, TLS termination moves to Cloudflare.
+#   You can either leave this in place (Cloudflare → Traefik with local cert)
+#   or switch to Cloudflare's origin cert.
+
+tls:
+  certificates:
+    - certFile: /certs/platform.ibbytech.com.crt
+      keyFile: /certs/platform.ibbytech.com.key

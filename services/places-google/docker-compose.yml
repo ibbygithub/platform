@@ -1,0 +1,33 @@
+networks:
+  platform_net:
+    external: true
+    name: platform_net
+
+services:
+  places-google:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: platform-places-google
+    container_name: platform-places-google
+    restart: unless-stopped
+
+    env_file:
+      - ./.env
+
+    networks:
+      - platform_net
+
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=platform_net
+
+      - traefik.http.routers.places-http.entrypoints=web
+      - traefik.http.routers.places-http.rule=Host(`places.platform.ibbytech.com`)
+      - traefik.http.routers.places-http.service=places
+      - traefik.http.services.places.loadbalancer.server.port=8081
+
+      - traefik.http.routers.places-https.entrypoints=websecure
+      - traefik.http.routers.places-https.rule=Host(`places.platform.ibbytech.com`)
+      - traefik.http.routers.places-https.service=places
+      - traefik.http.routers.places-https.tls=true

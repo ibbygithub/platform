@@ -1,0 +1,33 @@
+networks:
+  platform_net:
+    external: true
+    name: platform_net
+
+services:
+  llm-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: platform-llm-gateway
+    container_name: platform-llm-gateway
+    restart: unless-stopped
+
+    env_file:
+      - ./.env
+
+    networks:
+      - platform_net
+
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=platform_net
+
+      - traefik.http.routers.llm-http.entrypoints=web
+      - traefik.http.routers.llm-http.rule=Host(`llm.platform.ibbytech.com`)
+      - traefik.http.routers.llm-http.service=llm
+      - traefik.http.services.llm.loadbalancer.server.port=8080
+
+      - traefik.http.routers.llm-https.entrypoints=websecure
+      - traefik.http.routers.llm-https.rule=Host(`llm.platform.ibbytech.com`)
+      - traefik.http.routers.llm-https.service=llm
+      - traefik.http.routers.llm-https.tls=true
