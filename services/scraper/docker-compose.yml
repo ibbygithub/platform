@@ -1,67 +1,20 @@
-# Scraper service: Firecrawl (self-hosted) + platform wrapper API
+# Scraper service — platform wrapper API around Firecrawl
 #
-# Firecrawl GitHub: https://github.com/mendableai/firecrawl
-# Check their repo for the latest self-hosted setup notes before deploying.
+# Firecrawl is managed separately at /opt/firecrawl on svcnode-01.
+# Start Firecrawl first:
+#   cd /opt/firecrawl && docker compose up -d
 #
-# Internal network isolates Firecrawl and Redis from platform_net.
-# Only scraper-api is exposed to Traefik.
+# This compose only runs scraper-api, which calls Firecrawl on the host
+# via host.docker.internal (port 3002).
 
 networks:
   platform_net:
     external: true
     name: platform_net
-  scraper_internal:
-    driver: bridge
 
 services:
 
-  # ── Redis (Firecrawl job queue) ──────────────────────────────────────────────
-  scraper-redis:
-    image: redis:7-alpine
-    container_name: platform-scraper-redis
-    restart: unless-stopped
-    networks:
-      - scraper_internal
-
-  # ── Firecrawl API process ────────────────────────────────────────────────────
-  firecrawl-api:
-    image: ghcr.io/mendableai/firecrawl:latest
-    container_name: platform-firecrawl-api
-    restart: unless-stopped
-    environment:
-      - REDIS_URL=redis://scraper-redis:6379
-      - REDIS_RATE_LIMIT_URL=redis://scraper-redis:6379
-      - USE_DB_AUTHENTICATION=false
-      - PORT=3002
-      - FLY_PROCESS_GROUP=app
-      - NUM_WORKERS_PER_QUEUE=4
-    env_file:
-      - ./.env
-    depends_on:
-      - scraper-redis
-    networks:
-      - scraper_internal
-
-  # ── Firecrawl worker process ─────────────────────────────────────────────────
-  firecrawl-worker:
-    image: ghcr.io/mendableai/firecrawl:latest
-    container_name: platform-firecrawl-worker
-    restart: unless-stopped
-    environment:
-      - REDIS_URL=redis://scraper-redis:6379
-      - REDIS_RATE_LIMIT_URL=redis://scraper-redis:6379
-      - USE_DB_AUTHENTICATION=false
-      - PORT=3002
-      - FLY_PROCESS_GROUP=worker
-      - NUM_WORKERS_PER_QUEUE=4
-    env_file:
-      - ./.env
-    depends_on:
-      - scraper-redis
-    networks:
-      - scraper_internal
-
-  # ── Platform wrapper API (the only container on platform_net) ─────────────────
+  # ── Platform wrapper API ───────────────────────────────────────────────────
   scraper-api:
     build:
       context: ./api
@@ -69,15 +22,18 @@ services:
     image: platform-scraper-api
     container_name: platform-scraper-api
     restart: unless-stopped
+
     environment:
-      - FIRECRAWL_URL=http://firecrawl-api:3002
+      - FIRECRAWL_URL=http://host.docker.internal:3002
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
     env_file:
       - ./.env
-    depends_on:
-      - firecrawl-api
+
     networks:
       - platform_net
-      - scraper_internal
 
     labels:
       - traefik.enable=true
