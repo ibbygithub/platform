@@ -47,7 +47,7 @@ class MapRequest(BaseModel):
 def health() -> Dict[str, Any]:
     firecrawl_ok = False
     try:
-        r = requests.get(f"{FIRECRAWL_URL}/health", timeout=5)
+        r = requests.get(f"{FIRECRAWL_URL}/", timeout=5)
         firecrawl_ok = r.status_code == 200
     except Exception:
         pass
