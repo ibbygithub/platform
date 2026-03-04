@@ -200,12 +200,13 @@ def scrape(req: ScrapeRequest) -> Dict[str, Any]:
     # ── Persist + embed (non-fatal side-effect) ───────────────────────────────
     embedding = _embed(markdown or title)
     conn      = _db()
+    emb_json = json.dumps(embedding) if embedding else None
     _safe_persist(conn,
         """INSERT INTO scraper.scrape_results
-               (url, title, markdown, html, metadata, embedding_json)
-           VALUES (%s, %s, %s, %s, %s, %s)""",
+               (url, title, markdown, html, metadata, embedding_json, embedding)
+           VALUES (%s, %s, %s, %s, %s, %s, %s::vector)""",
         (req.url, title, markdown, html,
-         json.dumps(metadata), json.dumps(embedding) if embedding else None),
+         json.dumps(metadata), emb_json, emb_json),
     )
     if conn:
         conn.close()
@@ -272,12 +273,13 @@ def crawl(req: CrawlRequest) -> Dict[str, Any]:
         markdown  = page.get("markdown", "")
         metadata  = page.get("metadata", {})
         embedding = _embed(markdown)
+        emb_json  = json.dumps(embedding) if embedding else None
         _safe_persist(conn,
             """INSERT INTO scraper.crawl_results
-                   (session_id, url, status, markdown, metadata, embedding_json)
-               VALUES (%s, %s, %s, %s, %s, %s)""",
+                   (session_id, url, status, markdown, metadata, embedding_json, embedding)
+               VALUES (%s, %s, %s, %s, %s, %s, %s::vector)""",
             (session_id, page_url, pg_status or None, markdown,
-             json.dumps(metadata), json.dumps(embedding) if embedding else None),
+             json.dumps(metadata), emb_json, emb_json),
         )
     if conn:
         conn.close()
@@ -370,13 +372,14 @@ def extract(req: ExtractRequest) -> Dict[str, Any]:
     embed_text = json.dumps(extracted) if extracted else ""
     embedding  = _embed(embed_text)
     conn       = _db()
+    emb_json = json.dumps(embedding) if embedding else None
     for url in req.urls:
         _safe_persist(conn,
             """INSERT INTO scraper.extract_results
-                   (url, schema_def, extracted, embedding_json)
-               VALUES (%s, %s, %s, %s)""",
+                   (url, schema_def, extracted, embedding_json, embedding)
+               VALUES (%s, %s, %s, %s, %s::vector)""",
             (url, json.dumps(req.schema_def), json.dumps(extracted),
-             json.dumps(embedding) if embedding else None),
+             emb_json, emb_json),
         )
     if conn:
         conn.close()
