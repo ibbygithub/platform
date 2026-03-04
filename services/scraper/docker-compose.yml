@@ -24,10 +24,14 @@ services:
     restart: unless-stopped
 
     environment:
-      - FIRECRAWL_URL=http://host.docker.internal:3002
+      # Firecrawl — override to reach host-level Firecrawl from inside Docker
+      - FIRECRAWL_API_URL=http://host.docker.internal:3002
+      # LLM Gateway — container name on platform_net
+      - LLM_GATEWAY_URL=http://platform-llm-gateway:8080
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "dbnode-01:192.168.71.221"
 
     env_file:
       - ./.env
