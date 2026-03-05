@@ -65,3 +65,18 @@ If DNS resolution fails, fall back to direct IP:
 - brainnode-01: `192.168.71.222`
 
 All nodes are on the `192.168.71.x` internal network only. No public exposure.
+
+---
+
+## Path Convention Exceptions
+
+The platform path standard for Linux nodes is `/opt/git/work/<project-name>/`.
+The following services are exempt by documented decision — do not treat their
+paths as a pattern to follow.
+
+| Service | Actual Path | Node | Exception Reason |
+|:---|:---|:---|:---|
+| Firecrawl | `/opt/firecrawl` | svcnode-01 | Installed via upstream Docker Compose repo before path standard was codified. Root-owned `.env`. Migration risk exceeds benefit. Exception approved 2026-03-05. |
+
+**All new services must comply with the standard path.** This list is for
+legacy services only and will not grow without explicit sign-off.

@@ -3,7 +3,7 @@
 ## Status
 Active — All four endpoints (scrape, crawl, map, extract) fully operational.
 Auto-persists results + OpenAI embeddings to Postgres (pgvector). Semantic similarity
-search validated end-to-end. Only gap: Loki logging not yet implemented.
+search validated end-to-end. Loki structured logging enabled as of 2026-03-05.
 
 ## What This Service Does
 Scrapes and crawls web pages via a self-hosted Firecrawl instance; exposes single-page
@@ -142,36 +142,56 @@ def crawl_site(url: str, max_depth: int = 2, limit: int = 20) -> list[dict]:
 ```
 
 ## Observability
-- **Loki Label:** Not yet configured — no structured log output from this service
+- **Loki Label:** `{service="scraper"}` — all four endpoints emit structured logs
+- **Log labels:** `service`, `level`, `node=svcnode-01`, `method`, `endpoint`, `url`, `status_code`, `latency_ms`
+- **Loki query (Grafana):** `{service="scraper"}` — shows all scraper traffic
+- **Error filter:** `{service="scraper", level="error"}` — shows 4xx/5xx responses
 - **Grafana Dashboard:** Not yet configured
-
-⚠ Observability incomplete — Loki logging not yet implemented.
 
 ## Known Limitations / Quirks
 
-1. **Extract is degraded:** `/v1/extract` requires `OPENAI_API_KEY` or `OLLAMA_BASE_URL`
+1. **`max_depth=1` returns only the root URL:** Firecrawl's crawl treats `maxDepth`
+   as the maximum crawl depth, where depth 0 = the root URL and depth 1 = its direct
+   children. With `maxDepth=1`, only the root URL is processed (depth 0 only). Use
+   `max_depth >= 2` to actually traverse pages. The platform API defaults to `max_depth=2`.
+
+2. **`/v1/map` requires a sitemap or search API:** Firecrawl's map function works by
+   parsing `sitemap.xml` or by querying an external index (Supabase/Serper). Sites
+   without a `sitemap.xml` and no configured search API will return only the root URL.
+   For link discovery on arbitrary sites, use `/v1/crawl` with `max_depth=2` instead.
+
+3. **Playwright service crashes on concurrent browser contexts:** The self-hosted
+   Firecrawl playwright-service uses `--single-process` Chromium, which crashes if a
+   second browser page is opened while one is still loading. Firecrawl falls back to
+   the `fetch` engine on crash (static HTML only — no JS rendering). Playwright does
+   NOT have a restart policy; if it crashes, restart manually:
+   `cd /opt/firecrawl && docker compose start playwright-service`
+   or recreate: `docker compose up -d playwright-service`
+
+4. **Extract is degraded:** `/v1/extract` requires `OPENAI_API_KEY` or `OLLAMA_BASE_URL`
    in `/opt/firecrawl/.env` on svcnode-01. Neither is currently set. The endpoint exists
    but Firecrawl will return an error when called. Fix: add the LLM provider key and run
    `docker compose restart` in `/opt/firecrawl/` on svcnode-01.
 
-2. **Crawl timeout:** The wrapper polls Firecrawl's async crawl job for up to 5 minutes.
+5. **Crawl timeout:** The wrapper polls Firecrawl's async crawl job for up to 5 minutes.
    Callers should set HTTP timeouts of at least 360 seconds when calling `/v1/crawl`.
    The scraper-api itself times out at 300 seconds internally; configure `limit` and
    `max_depth` accordingly to stay within that window.
 
-3. **Firecrawl is LAN-only:** The Firecrawl backend (`svcnode-01:3002`) is not exposed
+6. **Firecrawl is LAN-only:** The Firecrawl backend (`svcnode-01:3002`) is not exposed
    through Traefik and has no TLS. Only the `scraper-api` wrapper is internet-accessible.
    Do not reference port 3002 from outside the LAN.
 
-4. **No inbound authentication:** The scraper-api wrapper does not validate incoming
+7. **No inbound authentication:** The scraper-api wrapper does not validate incoming
    requests. It is open to any caller that can reach `platform_net` or the Traefik FQDN.
-   Add middleware auth before any external exposure.
+   Add middleware auth before any external exposure. ⚠ Known gap — accepted for now
+   (internal LAN only).
 
-5. **Self-hosted Firecrawl version:** Running `ghcr.io/mendableai/firecrawl:latest`.
+8. **Self-hosted Firecrawl version:** Running `ghcr.io/mendableai/firecrawl:latest`.
    Crawl and extract API shapes may change on image updates. Pin to a digest in
    `/opt/firecrawl/docker-compose.yml` if stability is required.
 
-6. **Firecrawl env must be maintained manually:** `/opt/firecrawl/.env` is root-owned
+9. **Firecrawl env must be maintained manually:** `/opt/firecrawl/.env` is root-owned
    on svcnode-01 and is not tracked in the platform repo. Required vars:
    `OPENAI_API_KEY`, `OPENAI_BASE_URL=https://api.openai.com/v1`.
    After any change, recreate containers with:
@@ -201,6 +221,7 @@ Embed queries via the LLM Gateway: `POST http://platform-llm-gateway:8080/v1/emb
 Schema files: `services/scraper/schema.sql` (base), `services/scraper/schema_embeddings.sql` (pgvector migration).
 
 ## Last Updated
-2026-03-04 — All four endpoints fully validated. Extract working (Firecrawl
-OPENAI_API_KEY + OPENAI_BASE_URL set). DB persistence + pgvector semantic search
-confirmed across all tables. Service promoted from Degraded → Active.
+2026-03-05 — Loki structured logging implemented and validated. Crawl `max_depth`
+behavior documented (requires ≥ 2 for child pages). `/v1/map` sitemap-dependency
+documented. Playwright crash/restart runbook added. Firecrawl path exception filed.
+Auth gap acknowledged (M4 — deferred, internal-only scope).
