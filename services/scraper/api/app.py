@@ -36,6 +36,8 @@ PG_CONFIG = {
 # Persistence is enabled when PGPASSWORD is set; silently disabled otherwise.
 PERSIST_ENABLED = bool(PG_CONFIG["password"])
 
+LOKI_URL = os.getenv("LOKI_URL", "http://192.168.71.220:3100")
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 log = logging.getLogger("scraper")
 
@@ -135,6 +137,20 @@ def _safe_persist(conn, sql: str, params: tuple) -> None:
         log.warning("DB write failed (result still returned to caller): %s", exc)
 
 
+def _loki(level: str, msg: str, **labels: str) -> None:
+    """Push a structured log entry to Loki. Non-fatal — never raises."""
+    stream: Dict[str, str] = {"service": "scraper", "level": level, "node": "svcnode-01"}
+    stream.update({k: str(v) for k, v in labels.items() if v is not None})
+    try:
+        requests.post(
+            f"{LOKI_URL}/loki/api/v1/push",
+            json={"streams": [{"stream": stream, "values": [[str(time.time_ns()), msg]]}]},
+            timeout=3,
+        )
+    except Exception:
+        pass  # Loki failure must never affect the caller
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Routes
 # ──────────────────────────────────────────────────────────────────────────────
@@ -171,217 +187,294 @@ def health() -> Dict[str, Any]:
 @app.post("/v1/scrape")
 def scrape(req: ScrapeRequest) -> Dict[str, Any]:
     """Scrape a single URL. Auto-persists result + embedding to scraper.scrape_results."""
-    payload: Dict[str, Any] = {"url": req.url, "formats": req.formats}
-    if req.include_tags:
-        payload["includeTags"] = req.include_tags
-    if req.exclude_tags:
-        payload["excludeTags"] = req.exclude_tags
-    if req.wait_for_ms:
-        payload["waitFor"] = req.wait_for_ms
-
+    t0          = time.time()
+    status_code = "200"
     try:
-        r = requests.post(
-            f"{FIRECRAWL_API_URL}/v1/scrape",
-            headers=_fc_headers(), json=payload, timeout=60,
+        payload: Dict[str, Any] = {"url": req.url, "formats": req.formats}
+        if req.include_tags:
+            payload["includeTags"] = req.include_tags
+        if req.exclude_tags:
+            payload["excludeTags"] = req.exclude_tags
+        if req.wait_for_ms:
+            payload["waitFor"] = req.wait_for_ms
+
+        try:
+            r = requests.post(
+                f"{FIRECRAWL_API_URL}/v1/scrape",
+                headers=_fc_headers(), json=payload, timeout=60,
+            )
+            if r.status_code >= 400:
+                raise HTTPException(status_code=502,
+                    detail={"source": "firecrawl", "status": r.status_code, "body": r.text})
+            data     = r.json().get("data", {})
+            metadata = data.get("metadata", {})
+            title    = metadata.get("title") or data.get("title", "")
+            markdown = data.get("markdown", "")
+            html     = data.get("html", "")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+        # ── Persist + embed (non-fatal side-effect) ───────────────────────────
+        embedding = _embed(markdown or title)
+        conn      = _db()
+        emb_json  = json.dumps(embedding) if embedding else None
+        _safe_persist(conn,
+            """INSERT INTO scraper.scrape_results
+                   (url, title, markdown, html, metadata, embedding_json, embedding)
+               VALUES (%s, %s, %s, %s, %s, %s, %s::vector)""",
+            (req.url, title, markdown, html,
+             json.dumps(metadata), emb_json, emb_json),
         )
-        if r.status_code >= 400:
-            raise HTTPException(status_code=502,
-                detail={"source": "firecrawl", "status": r.status_code, "body": r.text})
-        data     = r.json().get("data", {})
-        metadata = data.get("metadata", {})
-        title    = metadata.get("title") or data.get("title", "")
-        markdown = data.get("markdown", "")
-        html     = data.get("html", "")
-    except HTTPException:
+        if conn:
+            conn.close()
+
+        return {"ok": True, "url": req.url, "data": data}
+
+    except HTTPException as exc:
+        status_code = str(exc.status_code)
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # ── Persist + embed (non-fatal side-effect) ───────────────────────────────
-    embedding = _embed(markdown or title)
-    conn      = _db()
-    emb_json = json.dumps(embedding) if embedding else None
-    _safe_persist(conn,
-        """INSERT INTO scraper.scrape_results
-               (url, title, markdown, html, metadata, embedding_json, embedding)
-           VALUES (%s, %s, %s, %s, %s, %s, %s::vector)""",
-        (req.url, title, markdown, html,
-         json.dumps(metadata), emb_json, emb_json),
-    )
-    if conn:
-        conn.close()
-
-    return {"ok": True, "url": req.url, "data": data}
+    except Exception:
+        status_code = "500"
+        raise
+    finally:
+        latency = int((time.time() - t0) * 1000)
+        _loki(
+            "error" if status_code != "200" else "info",
+            f"POST /v1/scrape {req.url} -> {status_code} {latency}ms",
+            method="POST", endpoint="/v1/scrape", url=req.url,
+            status_code=status_code, latency_ms=str(latency),
+        )
 
 
 @app.post("/v1/crawl")
 def crawl(req: CrawlRequest) -> Dict[str, Any]:
     """Crawl a site up to limit pages. Polls async Firecrawl job, then persists each page + embedding."""
-    payload: Dict[str, Any] = {
-        "url":           req.url,
-        "maxDepth":      req.max_depth,
-        "limit":         req.limit,
-        "scrapeOptions": {"formats": req.formats},
-    }
+    t0          = time.time()
+    status_code = "200"
     try:
-        r = requests.post(
-            f"{FIRECRAWL_API_URL}/v1/crawl",
-            headers=_fc_headers(), json=payload, timeout=30,
-        )
-        if r.status_code >= 400:
-            raise HTTPException(status_code=502,
-                detail={"source": "firecrawl", "status": r.status_code, "body": r.text})
-        init   = r.json()
-        job_id = init.get("id") or init.get("jobId")
-        if not job_id:
-            pages = init.get("data", init)
-        else:
-            deadline = time.time() + 300
-            pages    = []
-            while time.time() < deadline:
-                time.sleep(3)
-                poll = requests.get(
-                    f"{FIRECRAWL_API_URL}/v1/crawl/{job_id}",
-                    headers=_fc_headers(), timeout=30,
-                )
-                if poll.status_code >= 400:
-                    raise HTTPException(status_code=502,
-                        detail={"source": "firecrawl_poll", "job_id": job_id,
-                                "status": poll.status_code, "body": poll.text})
-                status_data = poll.json()
-                status      = status_data.get("status", "")
-                if status == "completed":
-                    pages = status_data.get("data", [])
-                    break
-                if status in ("failed", "cancelled"):
-                    raise HTTPException(status_code=502,
-                        detail={"source": "firecrawl_crawl", "job_id": job_id, "status": status})
+        payload: Dict[str, Any] = {
+            "url":           req.url,
+            "maxDepth":      req.max_depth,
+            "limit":         req.limit,
+            "scrapeOptions": {"formats": req.formats},
+        }
+        try:
+            r = requests.post(
+                f"{FIRECRAWL_API_URL}/v1/crawl",
+                headers=_fc_headers(), json=payload, timeout=30,
+            )
+            if r.status_code >= 400:
+                raise HTTPException(status_code=502,
+                    detail={"source": "firecrawl", "status": r.status_code, "body": r.text})
+            init   = r.json()
+            job_id = init.get("id") or init.get("jobId")
+            if not job_id:
+                pages = init.get("data", init)
             else:
-                raise HTTPException(status_code=504,
-                    detail=f"Crawl job {job_id} did not complete within 5 minutes")
-    except HTTPException:
+                deadline = time.time() + 300
+                pages    = []
+                while time.time() < deadline:
+                    time.sleep(3)
+                    poll = requests.get(
+                        f"{FIRECRAWL_API_URL}/v1/crawl/{job_id}",
+                        headers=_fc_headers(), timeout=30,
+                    )
+                    if poll.status_code >= 400:
+                        raise HTTPException(status_code=502,
+                            detail={"source": "firecrawl_poll", "job_id": job_id,
+                                    "status": poll.status_code, "body": poll.text})
+                    status_data = poll.json()
+                    status      = status_data.get("status", "")
+                    if status == "completed":
+                        pages = status_data.get("data", [])
+                        break
+                    if status in ("failed", "cancelled"):
+                        raise HTTPException(status_code=502,
+                            detail={"source": "firecrawl_crawl", "job_id": job_id, "status": status})
+                else:
+                    raise HTTPException(status_code=504,
+                        detail=f"Crawl job {job_id} did not complete within 5 minutes")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+        # ── Persist + embed each page (non-fatal) ─────────────────────────────
+        session_id = str(uuid.uuid4())
+        conn       = _db()
+        for page in pages:
+            page_url  = (page.get("metadata") or {}).get("sourceURL") or page.get("url", "")
+            pg_status = str((page.get("metadata") or {}).get("statusCode", "") or "")
+            markdown  = page.get("markdown", "")
+            metadata  = page.get("metadata", {})
+            embedding = _embed(markdown)
+            emb_json  = json.dumps(embedding) if embedding else None
+            _safe_persist(conn,
+                """INSERT INTO scraper.crawl_results
+                       (session_id, url, status, markdown, metadata, embedding_json, embedding)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s::vector)""",
+                (session_id, page_url, pg_status or None, markdown,
+                 json.dumps(metadata), emb_json, emb_json),
+            )
+        if conn:
+            conn.close()
+
+        result = {"ok": True, "url": req.url, "session_id": session_id,
+                  "total": len(pages), "data": pages}
+        _loki("info",
+              f"POST /v1/crawl {req.url} -> 200 {int((time.time()-t0)*1000)}ms pages={len(pages)}",
+              method="POST", endpoint="/v1/crawl", url=req.url,
+              status_code="200", latency_ms=str(int((time.time() - t0) * 1000)),
+              pages=str(len(pages)))
+        return result
+
+    except HTTPException as exc:
+        status_code = str(exc.status_code)
+        _loki("error",
+              f"POST /v1/crawl {req.url} -> {status_code} {int((time.time()-t0)*1000)}ms",
+              method="POST", endpoint="/v1/crawl", url=req.url,
+              status_code=status_code, latency_ms=str(int((time.time() - t0) * 1000)))
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # ── Persist + embed each page (non-fatal) ─────────────────────────────────
-    session_id = str(uuid.uuid4())
-    conn       = _db()
-    for page in pages:
-        page_url  = (page.get("metadata") or {}).get("sourceURL") or page.get("url", "")
-        pg_status = str((page.get("metadata") or {}).get("statusCode", "") or "")
-        markdown  = page.get("markdown", "")
-        metadata  = page.get("metadata", {})
-        embedding = _embed(markdown)
-        emb_json  = json.dumps(embedding) if embedding else None
-        _safe_persist(conn,
-            """INSERT INTO scraper.crawl_results
-                   (session_id, url, status, markdown, metadata, embedding_json, embedding)
-               VALUES (%s, %s, %s, %s, %s, %s, %s::vector)""",
-            (session_id, page_url, pg_status or None, markdown,
-             json.dumps(metadata), emb_json, emb_json),
-        )
-    if conn:
-        conn.close()
-
-    return {"ok": True, "url": req.url, "session_id": session_id,
-            "total": len(pages), "data": pages}
+    except Exception:
+        _loki("error",
+              f"POST /v1/crawl {req.url} -> 500 {int((time.time()-t0)*1000)}ms",
+              method="POST", endpoint="/v1/crawl", url=req.url,
+              status_code="500", latency_ms=str(int((time.time() - t0) * 1000)))
+        raise
 
 
 @app.post("/v1/map")
 def map_site(req: MapRequest) -> Dict[str, Any]:
     """Discover all URLs on a site. Auto-persists URL list to scraper.map_results."""
-    payload: Dict[str, Any] = {"url": req.url, "limit": req.limit}
+    t0          = time.time()
+    status_code = "200"
     try:
-        r = requests.post(
-            f"{FIRECRAWL_API_URL}/v1/map",
-            headers=_fc_headers(), json=payload, timeout=60,
+        payload: Dict[str, Any] = {"url": req.url, "limit": req.limit}
+        try:
+            r = requests.post(
+                f"{FIRECRAWL_API_URL}/v1/map",
+                headers=_fc_headers(), json=payload, timeout=60,
+            )
+            if r.status_code >= 400:
+                raise HTTPException(status_code=502,
+                    detail={"source": "firecrawl", "status": r.status_code, "body": r.text})
+            links = r.json().get("links", [])
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+        # ── Persist URL list (no embedding — URL lists don't need semantic search) ─
+        conn = _db()
+        _safe_persist(conn,
+            """INSERT INTO scraper.map_results (root_url, url_count, urls)
+               VALUES (%s, %s, %s)""",
+            (req.url, len(links), json.dumps(links)),
         )
-        if r.status_code >= 400:
-            raise HTTPException(status_code=502,
-                detail={"source": "firecrawl", "status": r.status_code, "body": r.text})
-        links = r.json().get("links", [])
-    except HTTPException:
+        if conn:
+            conn.close()
+
+        return {"ok": True, "url": req.url, "links": links}
+
+    except HTTPException as exc:
+        status_code = str(exc.status_code)
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # ── Persist URL list (no embedding — URL lists don't need semantic search) ─
-    conn = _db()
-    _safe_persist(conn,
-        """INSERT INTO scraper.map_results (root_url, url_count, urls)
-           VALUES (%s, %s, %s)""",
-        (req.url, len(links), json.dumps(links)),
-    )
-    if conn:
-        conn.close()
-
-    return {"ok": True, "url": req.url, "links": links}
+    except Exception:
+        status_code = "500"
+        raise
+    finally:
+        latency = int((time.time() - t0) * 1000)
+        _loki(
+            "error" if status_code != "200" else "info",
+            f"POST /v1/map {req.url} -> {status_code} {latency}ms",
+            method="POST", endpoint="/v1/map", url=req.url,
+            status_code=status_code, latency_ms=str(latency),
+        )
 
 
 @app.post("/v1/extract")
 def extract(req: ExtractRequest) -> Dict[str, Any]:
     """Extract structured data via Firecrawl LLM. Auto-persists result + embedding."""
-    payload: Dict[str, Any] = {"urls": req.urls}
-    if req.prompt:
-        payload["prompt"] = req.prompt
-    if req.schema_def:
-        payload["schema"] = req.schema_def
-
+    t0          = time.time()
+    status_code = "200"
     try:
-        r = requests.post(
-            f"{FIRECRAWL_API_URL}/v1/extract",
-            headers=_fc_headers(), json=payload, timeout=120,
-        )
-        if r.status_code >= 400:
-            raise HTTPException(status_code=502,
-                detail={"source": "firecrawl", "status": r.status_code, "body": r.text})
-        init      = r.json()
-        job_id    = init.get("id") or init.get("jobId")
-        extracted = init.get("data")
+        payload: Dict[str, Any] = {"urls": req.urls}
+        if req.prompt:
+            payload["prompt"] = req.prompt
+        if req.schema_def:
+            payload["schema"] = req.schema_def
 
-        if job_id and not extracted:
-            deadline = time.time() + 180
-            while time.time() < deadline:
-                time.sleep(3)
-                poll = requests.get(
-                    f"{FIRECRAWL_API_URL}/v1/extract/{job_id}",
-                    headers=_fc_headers(), timeout=30,
-                )
-                if poll.status_code >= 400:
-                    raise HTTPException(status_code=502,
-                        detail={"source": "firecrawl_extract_poll", "job_id": job_id,
-                                "status": poll.status_code, "body": poll.text})
-                sd     = poll.json()
-                status = sd.get("status", "")
-                if status == "completed":
-                    extracted = sd.get("data")
-                    break
-                if status in ("failed", "cancelled"):
-                    raise HTTPException(status_code=502,
-                        detail={"source": "firecrawl_extract", "job_id": job_id, "status": status})
-            else:
-                raise HTTPException(status_code=504,
-                    detail=f"Extract job {job_id} did not complete within 3 minutes")
-    except HTTPException:
+        try:
+            r = requests.post(
+                f"{FIRECRAWL_API_URL}/v1/extract",
+                headers=_fc_headers(), json=payload, timeout=120,
+            )
+            if r.status_code >= 400:
+                raise HTTPException(status_code=502,
+                    detail={"source": "firecrawl", "status": r.status_code, "body": r.text})
+            init      = r.json()
+            job_id    = init.get("id") or init.get("jobId")
+            extracted = init.get("data")
+
+            if job_id and not extracted:
+                deadline = time.time() + 180
+                while time.time() < deadline:
+                    time.sleep(3)
+                    poll = requests.get(
+                        f"{FIRECRAWL_API_URL}/v1/extract/{job_id}",
+                        headers=_fc_headers(), timeout=30,
+                    )
+                    if poll.status_code >= 400:
+                        raise HTTPException(status_code=502,
+                            detail={"source": "firecrawl_extract_poll", "job_id": job_id,
+                                    "status": poll.status_code, "body": poll.text})
+                    sd     = poll.json()
+                    status = sd.get("status", "")
+                    if status == "completed":
+                        extracted = sd.get("data")
+                        break
+                    if status in ("failed", "cancelled"):
+                        raise HTTPException(status_code=502,
+                            detail={"source": "firecrawl_extract", "job_id": job_id, "status": status})
+                else:
+                    raise HTTPException(status_code=504,
+                        detail=f"Extract job {job_id} did not complete within 3 minutes")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+        # ── Persist + embed (non-fatal) ───────────────────────────────────────
+        embed_text = json.dumps(extracted) if extracted else ""
+        embedding  = _embed(embed_text)
+        conn       = _db()
+        emb_json   = json.dumps(embedding) if embedding else None
+        for url in req.urls:
+            _safe_persist(conn,
+                """INSERT INTO scraper.extract_results
+                       (url, schema_def, extracted, embedding_json, embedding)
+                   VALUES (%s, %s, %s, %s, %s::vector)""",
+                (url, json.dumps(req.schema_def), json.dumps(extracted),
+                 emb_json, emb_json),
+            )
+        if conn:
+            conn.close()
+
+        return {"ok": True, "urls": req.urls, "data": extracted}
+
+    except HTTPException as exc:
+        status_code = str(exc.status_code)
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # ── Persist + embed (non-fatal) ───────────────────────────────────────────
-    embed_text = json.dumps(extracted) if extracted else ""
-    embedding  = _embed(embed_text)
-    conn       = _db()
-    emb_json = json.dumps(embedding) if embedding else None
-    for url in req.urls:
-        _safe_persist(conn,
-            """INSERT INTO scraper.extract_results
-                   (url, schema_def, extracted, embedding_json, embedding)
-               VALUES (%s, %s, %s, %s, %s::vector)""",
-            (url, json.dumps(req.schema_def), json.dumps(extracted),
-             emb_json, emb_json),
+    except Exception:
+        status_code = "500"
+        raise
+    finally:
+        latency = int((time.time() - t0) * 1000)
+        _loki(
+            "error" if status_code != "200" else "info",
+            f"POST /v1/extract {req.urls} -> {status_code} {latency}ms",
+            method="POST", endpoint="/v1/extract",
+            status_code=status_code, latency_ms=str(latency),
         )
-    if conn:
-        conn.close()
-
-    return {"ok": True, "urls": req.urls, "data": extracted}

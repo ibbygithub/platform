@@ -28,6 +28,8 @@ services:
       - FIRECRAWL_API_URL=http://host.docker.internal:3002
       # LLM Gateway — container name on platform_net
       - LLM_GATEWAY_URL=http://platform-llm-gateway:8080
+      # Loki — centralized log aggregation (svcnode-01 internal)
+      - LOKI_URL=http://192.168.71.220:3100
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
