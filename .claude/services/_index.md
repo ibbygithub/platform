@@ -33,6 +33,17 @@ unless otherwise noted.
 
 ---
 
+## Non-Platform Tools
+
+Tools running on platform nodes that are NOT shared services and NOT consumed
+by other services or agents. Listed for inventory completeness only.
+
+| Tool | Node | Purpose | Notes |
+|:---|:---|:---|:---|
+| Focalboard | svcnode-01 | Self-hosted project management / kanban board (Mattermost OSS) | Standalone UI — not behind Traefik, not API-consumed |
+
+---
+
 ## Adding a New Service
 
 Run `/register-service` after any deployment to svcnode-01.
