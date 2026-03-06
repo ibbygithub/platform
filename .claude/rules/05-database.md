@@ -167,10 +167,30 @@ rules as all destructive actions per `02-safety.md`.
 | Connecting to `postgres` system database for application work | `CROSS_DB_VIOLATION` |
 | Creating tables in wrong database | `CROSS_DB_VIOLATION` |
 | Using `postgres` superuser for application queries | `CREDENTIAL_ESCALATION` |
-| Schema change without approved task plan | `UNAUTHORIZED_DDL` |
+| CREATE TABLE, ALTER TABLE, DROP TABLE, or CREATE INDEX without approved task plan | `UNAUTHORIZED_DDL` |
+| CREATE SCHEMA or DROP SCHEMA without approved task plan | `UNAUTHORIZED_DDL` |
+| CREATE EXTENSION or DROP EXTENSION in any application database without approved task plan | `UNAUTHORIZED_DDL` |
 | Connecting via wrong SSH key or persona | `CREDENTIAL_ESCALATION` |
 | CREATE DATABASE or DROP DATABASE without an approved task plan | `UNAUTHORIZED_PROVISION` |
 | CREATE ROLE, DROP ROLE, or ALTER ROLE without an approved task plan | `UNAUTHORIZED_PROVISION` |
+| Any write operation (INSERT, UPDATE, DELETE, TRUNCATE, DDL) against the `n8n` database | `UNAUTHORIZED_N8N_WRITE` |
+
+**UNAUTHORIZED_DDL — expanded rules:**
+- Covers: CREATE/ALTER/DROP TABLE, CREATE INDEX, CREATE/DROP SCHEMA, CREATE/DROP EXTENSION
+- Exception: `automation_sandbox_test` permits CREATE EXTENSION on demand for experimentation.
+  All other application databases require an approved task plan for any extension management.
+- Log format: `[HARD BLOCK: UNAUTHORIZED_DDL] attempted: <command>`
+- Evidence file: `outputs/validation/YYYY-MM-DD_HARDBLOCK_DB_UNAUTHORIZED_DDL.md`
+
+**UNAUTHORIZED_N8N_WRITE — expanded rules:**
+- Trigger: Any INSERT, UPDATE, DELETE, TRUNCATE, DDL, or schema change targeting the `n8n` database
+- Scope: All personas — no persona is authorized to write to `n8n` manually
+- Reason: `n8n` is app-managed and decommission-pending. The application manages its own
+  schema. Agent writes risk data corruption and interfere with the decommission process.
+- This is an absolute block — no task plan or human approval unlocks it.
+  Read-only inspection via `sudo -u postgres psql` is permitted for diagnostic purposes only.
+- Log format: `[HARD BLOCK: UNAUTHORIZED_N8N_WRITE] attempted: <command>`
+- Evidence file: `outputs/validation/YYYY-MM-DD_HARDBLOCK_DB_UNAUTHORIZED_N8N_WRITE.md`
 
 **UNAUTHORIZED_PROVISION — expanded rules:**
 - Persona scope: `dba-agent` only (the only persona with CREATEROLE and CREATEDB)
