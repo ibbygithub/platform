@@ -9,7 +9,7 @@
 | **Primary User** | `mcp_shogun`, `places_app` |
 | **Purpose** | Project Shogun — trips, surveys, embeddings, places |
 | **Size** | 9.3 MB (largest active database) |
-| **Extensions** | pgvector (vector), pg_stat_statements |
+| **Extensions** | vector 0.8.1, pg_stat_statements 1.11, pgcrypto 1.3 — installed for PII/auth column protection; no columns currently encrypted; encryption implementation requires an approved task plan |
 
 ## Connection
 

@@ -91,15 +91,37 @@ Before writing any SQL or schema change, answer this question:
 
 ---
 
-## Installed Extensions (Global)
+## Installed Extensions
 
-| Extension | Version | Schema | Purpose |
+| Extension | Version | Databases | Purpose |
 |:---|:---|:---|:---|
-| `vector` (pgvector) | 0.8.1 | `public` | Vector embeddings and similarity search |
-| `pg_stat_statements` | 1.11 | `public` | Query performance monitoring |
-| `plpgsql` | 1.0 | `pg_catalog` | PL/pgSQL procedural language |
+| `vector` (pgvector) | 0.8.1 | platform_v1, shogun_v1, mltrader | Vector embeddings and similarity search |
+| `pg_stat_statements` | 1.11 | all application databases | Query performance monitoring |
+| `pgcrypto` | 1.3 | shogun_v1 only | PII column protection and authentication hashing |
+| `plpgsql` | 1.0 | all databases | PL/pgSQL procedural language (PostgreSQL built-in) |
+
+**pg_stat_statements (1.11)** is installed in all application databases for query monitoring.
+It is also present in the `postgres` system database for cluster-wide monitoring via
+Grafana/pg_monitor. It is NOT a shared global extension — it must be installed per database.
+
+**pgcrypto (1.3)** is installed in `shogun_v1` only. Intended for PII column protection and
+authentication hashing. No columns are currently encrypted. Required in any future database
+that will handle PII data.
+
+**Platform standard: pgvector minimum version 0.8.1.** All application databases must meet
+this minimum. Exceptions must be documented.
 
 pgvector is available for embedding storage. Use it via the `vector` column type.
+
+### New Database Provisioning Checklist
+
+When provisioning a new application database, install extensions in this order:
+
+- **pg_stat_statements**: required at creation for all databases
+- **pgvector**: required at creation if the database will store embeddings or vector
+  similarity data. Minimum version 0.8.1.
+- **pgcrypto**: required at creation for any database that will handle PII, credentials,
+  or encrypted data fields.
 
 ---
 

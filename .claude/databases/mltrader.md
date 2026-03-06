@@ -18,6 +18,14 @@ sudo -u postgres psql -d mltrader
 psql -h 127.0.0.1 -U mltrader_user -d mltrader
 ```
 
+## Extensions
+
+| Extension | Version | Notes |
+|:---|:---|:---|
+| `vector` (pgvector) | 0.8.1 | Upgraded from 0.8.0 on 2026-03-06 |
+| `pg_stat_statements` | 1.11 | Installed 2026-03-06 |
+| `pgcrypto` | not installed | Not applicable to current use case |
+
 ## Schemas
 
 ### `mltrader` schema

@@ -16,6 +16,14 @@
 sudo -u postgres psql -d automation_sandbox_test
 ```
 
+## Extensions
+
+| Extension | Version | Notes |
+|:---|:---|:---|
+| `pg_stat_statements` | 1.11 | Installed 2026-03-06 |
+| `vector` (pgvector) | not installed by default | Install on demand: `CREATE EXTENSION vector;` (safe in sandbox) |
+| `pgcrypto` | not installed by default | Install on demand: `CREATE EXTENSION pgcrypto;` (safe in sandbox) |
+
 ## Schemas
 
 ### `public` schema

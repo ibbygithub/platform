@@ -9,7 +9,7 @@
 | **Primary User** | `scraper_app`, `places_app` |
 | **Purpose** | Active platform services — scraper results, Google Places cache |
 | **Size** | 8.6 MB |
-| **Extensions** | pgvector (vector), pg_stat_statements |
+| **Extensions** | vector 0.8.1, pg_stat_statements 1.11, pgcrypto: not installed — required before any PII column encryption is implemented |
 
 ## Connection
 
