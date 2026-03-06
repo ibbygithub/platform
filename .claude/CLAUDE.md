@@ -1,78 +1,238 @@
-# IbbyTech Platform — Claude Code Briefing
+# IbbyTech Platform — Agent Behavior Rules
 
-## What This Repo Is
-This is the **IbbyTech Platform** repository — the single source of truth for shared
-infrastructure, enterprise services, and engineering standards across all IbbyTech projects.
-
-Every project under `C:\git\work\<project>` references this repo for platform context.
-On Linux nodes, the equivalent path is `/opt/git/work/<project>`.
+This file governs how Claude Code behaves as an agent on the IbbyTech Platform.
+It is read at the start of every session, without exception.
+These are behavioral directives, not suggestions.
 
 ---
 
-## The Three-Node Architecture
+## Session Startup Protocol — Mandatory, Every Session
 
-You are working within a purpose-built three-node execution environment.
-Each node has a strict role. Never mix responsibilities across nodes.
+Before accepting any task instruction, the agent must complete the following
+orientation sequence in full. This is not optional and may not be abbreviated.
 
-| Node | Address | Role | What Lives Here |
-|:---|:---|:---|:---|
-| **svcnode-01** | `192.168.71.220` | Docker Platform | All Docker containers, API gateways, Traefik, enterprise services |
-| **dbnode-01** | `192.168.71.221` | Database Tier | PostgreSQL `shogun_v1` only. No Docker. No applications. |
-| **brainnode-01** | `192.168.71.222` | Application Runtime | Main apps, MCP servers, cron jobs, ETL scripts. No Docker. |
+### Step 1 — Load Platform Rules (in order)
 
-**Control Plane:** `ibbytech-laptop` (Windows 11) — all coding happens here.
-Transport to nodes is **Git only** (push/pull). Never SCP, SFTP, or rsync.
+Read each of the following files completely before proceeding:
+
+1. `.claude/rules/01-infrastructure.md`
+2. `.claude/rules/02-safety.md`
+3. `.claude/rules/03-platform-standards.md`
+4. `.claude/rules/04-git-discipline.md`
+
+If any file is missing or unreadable — stop, report which file is missing,
+and wait for human resolution before continuing.
+
+### Step 2 — Git State Check
+
+Run the following commands and capture output:
+
+```bash
+git status
+git branch -a
+git worktree list
+git log --oneline -5
+```
+
+Evaluate the output against these criteria:
+
+| Condition | Required Action |
+|:---|:---|
+| Uncommitted changes on any branch | Report files and ask how to handle before proceeding |
+| Feature branches older than 7 days | Flag by name and ask whether to clean up |
+| Any worktree present | Report name, branch, and age — ask whether it is still active |
+| Currently on `main` branch | Immediately switch to `develop`, report this action |
+| Merge conflicts present | Stop, report in full, do not proceed until resolved |
+
+### Step 3 — Derive Last Work Context
+
+Read `outputs/validation/` and identify the three most recent evidence files.
+Extract: task name, completion date, outcome (completed / abandoned / blocked).
+This replaces any need for a manually maintained status file.
+
+### Step 4 — Produce Session Brief
+
+Produce the following formatted output before asking for task input:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  📋  SESSION BRIEF — IbbyTech Platform                         ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Current Branch:  <branch name and clean/dirty status>         ║
+║  Active Worktrees: <none / list with branch and age>           ║
+║  Last Completed:  <task name and date from validation/>        ║
+║  Last Abandoned:  <task name and date, or none>                ║
+║  Open Items:      <service docs pending, stale branches, etc>  ║
+║  Rules Loaded:    01 ✓  02 ✓  03 ✓  04 ✓                      ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+After the Session Brief, ask exactly one question:
+
+> "What are we working on today?"
+
+Do not ask multiple questions. Do not offer suggestions unprompted.
+Do not begin any task work until the human has responded.
 
 ---
 
-## Enterprise Services First
+## Two-Stage Task Plan Approval
 
-Before building any new capability, check `.claude/services/_index.md`.
+Every task follows a two-stage approval process before any code, file, or
+configuration is created or modified.
 
-If a service already exists on `svcnode-01` — a gateway, an API proxy, a scraping
-service — **consume it**. Do not duplicate infrastructure. This is not a suggestion;
-it is a platform standard.
-
-Current enterprise services include: Google Places, Telegram Bot, LLM Gateway,
-Firecrawl (web scraping), Loki (logging), Grafana (observability).
-See the service index for consumption details.
+No exceptions. A task that skips either stage is a protocol violation.
 
 ---
 
-## Identity and Access
+### Stage 1 — Technology Vetting (conditional)
 
-Two personas cover all remote access. Never improvise credentials.
+Stage 1 is required if and only if the task involves introducing any software,
+tool, package, library, or service not already present in the platform stack.
 
-| Persona | Account | Key File | Authorized Nodes |
-|:---|:---|:---|:---|
-| **DevOps Agent** | `devops-agent` | `~/.ssh/devops-agent_ed25519_clean` | `svcnode-01`, `brainnode-01` |
-| **DBA Agent** | `dba-agent` | `~/.ssh/dba-agent_ed25519` | `dbnode-01` only |
+**Canonical platform stack** (no vetting required for these):
+- Runtime: Python 3.x, Node.js
+- Containers: Docker, Docker Compose
+- Reverse proxy: Traefik v3
+- Database: PostgreSQL (shogun_v1 on dbnode-01)
+- Logging: Loki
+- Observability: Grafana
+- Network: platform_net (Docker bridge)
+- OS: Ubuntu (Linux nodes), Windows 11 (laptop)
+- Transport: Git / GitHub
 
-If a task requires access to a node and neither persona covers it — **stop and ask**.
-Do not use any other SSH identity found on the system.
+**If the task requires anything outside this list**, produce the following
+before Stage 2:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  🔍  TECHNOLOGY VETTING REQUIRED                               ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Proposed:     <tool/package/service name and version>         ║
+║  Purpose:      <what problem it solves in this task>           ║
+║  Alternatives: <2-3 alternatives considered>                   ║
+║  Why this one: <specific reasons for this choice>              ║
+║  Platform fit: <how it integrates with existing stack>         ║
+║  Risk:         <any concerns — security, maintenance, overlap> ║
+╚══════════════════════════════════════════════════════════════════╝
+Approve this technology choice before I proceed to the execution plan.
+Respond "approved", "rejected", or ask questions.
+```
+
+The agent does not proceed to Stage 2 until the human responds with
+explicit approval of all proposed technologies.
+
+If a technology is rejected, the agent must propose an alternative or
+ask for direction. It does not proceed with the rejected technology under
+any circumstances.
 
 ---
 
-## Development Workflow
+### Stage 2 — Execution Plan Approval
 
-1. **Code on Windows:** Work in `C:\git\work\<project>`. Commit to `feature/<name>`.
-2. **Transport via Git:** Push to GitHub. Pull on target node.
-3. **Execute on Linux:** SSH to target node → `git pull` → start service.
+After technology choices are approved (or if Stage 1 was not required),
+produce the full execution plan:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  📝  EXECUTION PLAN                                            ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Task:         <plain English description>                     ║
+║  Node:         <target node(s)>                                ║
+║  Persona:      <devops-agent / dba-agent>                      ║
+║  Branch:       feature/YYYYMMDD-<task-slug>                    ║
+║  Worktree:     <yes/no — name if yes>                          ║
+║  Files:        <files to be created or modified>               ║
+║  Services:     <platform services to be consumed>              ║
+║  Deliverables: <what will exist when task is complete>         ║
+║  Evidence:     outputs/validation/YYYY-MM-DD_<task>_report.md  ║
+╚══════════════════════════════════════════════════════════════════╝
+Approve this plan to begin, or ask questions / request changes.
+Respond "proceed" to start execution.
+```
+
+The agent does not write a single line of code, configuration, or
+documentation until the human responds with `proceed` or an equivalent.
+
+Accepted equivalents: "go", "go ahead", "do it", "start", "yes".
+Silence is not consent. Ambiguous responses prompt the agent to re-ask once.
 
 ---
 
-## Observability Standard
+## Scope Discipline During Execution
 
-All services must emit structured logs to Loki. All API gateway calls must be logged.
-This supports billing, troubleshooting, security auditing, and support.
-If you write a service that does not log to Loki, flag it as incomplete.
+Once execution begins, the agent operates within the approved plan boundary.
+
+- Do not expand scope beyond what was approved in Stage 2
+- Do not install, configure, or create anything not listed in the plan
+- If a discovery during execution reveals the plan needs to change —
+  stop, report the discovery, and request a plan amendment before continuing
+- "While I'm here I'll also..." is a scope violation — stop and ask instead
+
+If a task requires touching a node or persona not in the approved plan,
+treat it as a new task requiring its own two-stage approval.
 
 ---
 
-## Reference Files
+## Asking for Help vs. Proceeding
 
-- Node roles and persona rules: `.claude/rules/01-infrastructure.md`
-- Safety and evidence rules: `.claude/rules/02-safety.md`
-- Platform standards: `.claude/rules/03-platform-standards.md`
-- Service index: `.claude/services/_index.md`
-- Service doc template: `templates/service-doc-template.md`
+When the agent encounters uncertainty, the rule is simple:
+
+**Stop and ask** when:
+- The correct approach requires a choice between two valid options
+- A technology or configuration decision has meaningful tradeoffs
+- The task requires something not covered by the rules files
+- An error or unexpected result occurs during execution
+- Scope expansion appears necessary
+
+**Proceed autonomously** when:
+- The action is clearly covered by an approved plan
+- The action is Green Zone per `04-git-discipline.md`
+- The action is purely additive and fully reversible
+- The pattern is already established in the codebase
+
+When in doubt — stop and ask. Speed is never worth an undocumented decision.
+
+---
+
+## Communication Standards
+
+The agent communicates with the human developer as a senior engineering
+peer, not as a tool awaiting commands.
+
+- State what you are doing and why before doing it
+- Flag risks and tradeoffs proactively — do not surface them only when asked
+- Be direct about uncertainty — "I don't know" is acceptable; guessing is not
+- Do not pad responses with disclaimers, apologies, or excessive caveats
+- Do not repeat instructions back verbatim — demonstrate understanding through action
+- When presenting options, recommend one and explain why
+
+---
+
+## Token and Context Efficiency
+
+The session startup protocol exists to front-load context, not to burn tokens
+on repeated discovery. Once the Session Brief is produced, the agent operates
+from that loaded context for the remainder of the session.
+
+- Do not re-read rule files mid-session unless a specific rule needs verification
+- Do not re-scan the repo structure if it was already mapped during startup
+- Do not ask the human for information already derivable from git or the filesystem
+- Cache discovered context within the session — ask once, not repeatedly
+
+If the session has been running long and context may be degraded, say so
+explicitly and offer to produce a new Session Brief before continuing.
+
+---
+
+## Hard Block Reference
+
+Git-related hard blocks follow `04-git-discipline.md`.
+Infrastructure hard blocks follow `01-infrastructure.md`.
+Safety hard blocks follow `02-safety.md`.
+
+When any hard block is triggered during an active task:
+1. Stop immediately — do not complete the triggering action
+2. Produce the hard block output (format per `02-safety.md`)
+3. Write evidence to `outputs/validation/`
+4. Wait for human instruction — do not attempt workarounds
