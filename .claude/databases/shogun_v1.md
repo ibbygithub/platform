@@ -60,7 +60,7 @@ App user: `places_app`
 |:---|:---|:---|:---|:---|
 | `google_places` | `postgres` | 256 kB | 20 | Cached place records |
 | `google_place_snapshots` | `postgres` | 176 kB | 60 | Point-in-time snapshots |
-| `neighborhood_anchors` | `places_app` | 24 kB | 0 | Neighborhood reference points |
+| `neighborhood_anchors` | `places_app` | 24 kB | 0 | Neighborhood reference points — owner: places_app (not postgres — intentional; places_app manages this table directly) |
 
 **Agent note:** This schema has live data — 20 places and 60 snapshots.
 This is the active places data source for Project Shogun.

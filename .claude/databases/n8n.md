@@ -1,5 +1,12 @@
 # Database Reference — n8n
 
+> **STATUS: DECOMMISSION-PENDING**
+> Service: n8n workflow automation
+> Reason: Replaced by Claude Code agent workflows and custom IbbyTech agent pipeline development.
+> Database retained for historical reference only. No new development.
+> Target decommission date: TBD.
+> Hard block: UNAUTHORIZED_N8N_WRITE covers all write operations.
+
 ## Identity
 
 | Property | Value |
@@ -15,6 +22,10 @@
 ```bash
 sudo -u postgres psql -d n8n
 # Application connects automatically — do not modify connection config
+# For read-only inspection only — do not use for application queries:
+psql -h 127.0.0.1 -U n8n_user -d n8n
+# Note: n8n_user connection is for diagnostic inspection only.
+#       This database is decommission-pending — no application development.
 ```
 
 ## Schemas

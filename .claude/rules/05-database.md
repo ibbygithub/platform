@@ -52,7 +52,10 @@ If TCP connection is required, use `-h 127.0.0.1` not `-h localhost`.
 
 ## Database Inventory — Canonical Reference
 
-Six production databases exist. Each has a strict purpose.
+Six application databases are managed on this cluster. PostgreSQL system databases
+(`postgres`, `template0`, `template1`) are present but must never be used for application
+work. These system databases are excluded from all agent routing, connection, and
+documentation scope.
 **Do not use a database for a purpose other than what is documented here.**
 
 | Database | Owner | Purpose | Status |
