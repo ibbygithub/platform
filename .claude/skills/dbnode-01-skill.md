@@ -15,8 +15,8 @@ Load this skill whenever a task involves:
 |:---|:---|:---|:---|
 | Scraper results / web crawl data | `platform_v1` | `scraper` | `scraper_app` |
 | Google Places (platform services) | `platform_v1` | `places` | `places_app` |
-| Project Shogun features | `shogun_v1` | `public` | `mcp_shogun` |
-| Google Places (Shogun project) | `shogun_v1` | `places` | `places_app` |
+| Project Shogun features (public schema) | `shogun_v1` | `public` | `mcp_shogun` (CRUD via mcp_group) |
+| Google Places (Shogun project) | `shogun_v1` | `places` | `places_app` (full DML, places schema only) |
 | ML trading research | `mltrader` | `mltrader` | `mltrader_user` |
 | n8n workflows | `n8n` | `n8n` | `n8n_user` (app-managed) |
 | Testing / throwaway | `automation_sandbox_test` | `public` | `dba-agent` |

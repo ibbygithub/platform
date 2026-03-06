@@ -15,8 +15,12 @@
 
 ```bash
 sudo -u postgres psql -d shogun_v1
-# or as app user:
+# or as app user (public schema — CRUD via mcp_group):
 psql -h 127.0.0.1 -U mcp_shogun -d shogun_v1
+# or as app user (places schema operations only):
+psql -h 127.0.0.1 -U places_app -d shogun_v1
+# Note: places_app has full DML on shogun_v1.places schema only.
+#       It does not have access to public schema tables.
 ```
 
 ---

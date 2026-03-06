@@ -80,14 +80,22 @@ Before writing any SQL or schema change, answer this question:
 | If the task involves... | Use this database |
 |:---|:---|
 | Scraper service, crawl results, web data | `platform_v1` → `scraper` schema |
-| Google Places data for platform services | `platform_v1` → `places` schema |
+| Google Places data for platform gateway services | `platform_v1` → `places` schema |
 | Project Shogun features, trips, users | `shogun_v1` → `public` or `places` schema |
-| Google Places data for Shogun | `shogun_v1` → `places` schema |
+| Google Places data for Shogun application | `shogun_v1` → `places` schema |
 | ML trading models or signals | `mltrader` → `mltrader` schema |
 | n8n workflow state | `n8n` → `n8n` schema |
 | Experimental or throwaway work | `automation_sandbox_test` |
 
 **If uncertain — stop and ask. Do not guess.**
+
+> **KNOWN ISSUE — Google Places routing:** Google Places gateway and Shogun application
+> data are currently entangled in the same service deployment. An agent receiving a generic
+> "store Google Places data" task must clarify with the human whether the target is the
+> platform gateway (`platform_v1.places` schema) or the Shogun application dataset
+> (`shogun_v1.places` schema) before executing any write operation. Do not assume routing
+> from task description alone. Full decoupling is tracked as a separate Project Shogun
+> architecture task.
 
 ---
 
@@ -131,10 +139,10 @@ When provisioning a new application database, install extensions in this order:
 |:---|:---|:---|:---|:---|
 | `postgres` | ✅ Yes | ✅ Yes | — | System superuser — infrastructure only |
 | `dba-agent` | ❌ No | ✅ Yes | `pg_monitor`, `scraper_app` | Agent DBA persona — platform ops. **Cluster privileges: CREATEROLE, CREATEDB (explicit grants).** Use only for documented provisioning tasks with an approved task plan. Never invoke speculatively. |
-| `scraper_app` | ❌ No | ✅ Yes | — | Scraper service application user |
+| `scraper_app` | ❌ No | ✅ Yes | — | Scraper service application user. **Grants: SELECT, INSERT, UPDATE on scraper schema tables only. No DELETE — scraper tables are append-only by design. Data removal requires dba-agent with an approved task plan.** |
 | `places_app` | ❌ No | ✅ Yes | — | Google Places service application user |
-| `mcp_shogun` | ❌ No | ✅ Yes | `mcp_group` | MCP server access to Shogun |
-| `mcp_group` | ❌ No | ❌ No | — | MCP role group (no direct login) |
+| `mcp_shogun` | ❌ No | ✅ Yes | `mcp_group` | MCP server access to Shogun. Only current member of mcp_group. **Status: dormant — MCP deployment failed, pending architecture decision. Do not modify mcp_group membership or grants without an approved MCP architecture task plan.** |
+| `mcp_group` | ❌ No | ❌ No | — | MCP role group (no direct login). **Grants: full CRUD (SELECT, INSERT, UPDATE, DELETE) on all shogun_v1 public schema tables. No access to shogun_v1.places schema — places schema is restricted to places_app only.** |
 | `mltrader_user` | ❌ No | ✅ Yes | — | ML trader application user |
 | `n8n_user` | ❌ No | ✅ Yes | — | n8n application user |
 
