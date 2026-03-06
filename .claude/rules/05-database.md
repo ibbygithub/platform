@@ -108,7 +108,7 @@ pgvector is available for embedding storage. Use it via the `vector` column type
 | Role | Superuser | Can Login | Member Of | Purpose |
 |:---|:---|:---|:---|:---|
 | `postgres` | ✅ Yes | ✅ Yes | — | System superuser — infrastructure only |
-| `dba-agent` | ❌ No | ✅ Yes | `pg_monitor`, `scraper_app` | Agent DBA persona — platform ops |
+| `dba-agent` | ❌ No | ✅ Yes | `pg_monitor`, `scraper_app` | Agent DBA persona — platform ops. **Cluster privileges: CREATEROLE, CREATEDB (explicit grants).** Use only for documented provisioning tasks with an approved task plan. Never invoke speculatively. |
 | `scraper_app` | ❌ No | ✅ Yes | — | Scraper service application user |
 | `places_app` | ❌ No | ✅ Yes | — | Google Places service application user |
 | `mcp_shogun` | ❌ No | ✅ Yes | `mcp_group` | MCP server access to Shogun |
@@ -147,6 +147,15 @@ rules as all destructive actions per `02-safety.md`.
 | Using `postgres` superuser for application queries | `CREDENTIAL_ESCALATION` |
 | Schema change without approved task plan | `UNAUTHORIZED_DDL` |
 | Connecting via wrong SSH key or persona | `CREDENTIAL_ESCALATION` |
+| CREATE DATABASE or DROP DATABASE without an approved task plan | `UNAUTHORIZED_PROVISION` |
+| CREATE ROLE, DROP ROLE, or ALTER ROLE without an approved task plan | `UNAUTHORIZED_PROVISION` |
+
+**UNAUTHORIZED_PROVISION — expanded rules:**
+- Persona scope: `dba-agent` only (the only persona with CREATEROLE and CREATEDB)
+- Required before proceeding: human confirmation with task plan reference or explicit
+  session approval — silence is not consent
+- Log format: `[HARD BLOCK: UNAUTHORIZED_PROVISION] attempted: <command>`
+- Evidence file: `outputs/validation/YYYY-MM-DD_HARDBLOCK_DB_UNAUTHORIZED_PROVISION.md`
 
 Evidence file naming: `outputs/validation/YYYY-MM-DD_HARDBLOCK_DB_<type>.md`
 

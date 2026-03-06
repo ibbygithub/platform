@@ -65,6 +65,10 @@ Before writing any SQL or schema change:
 - [ ] Confirmed app user for connection
 - [ ] Checked `05-database.md` for any hard block triggers
 - [ ] If schema change: task plan approved, rollback strategy documented
+- [ ] If operating as dba-agent: this persona holds CREATEROLE and CREATEDB cluster
+      privileges. Any task involving CREATE DATABASE, DROP DATABASE, CREATE ROLE,
+      DROP ROLE, or ALTER ROLE requires an approved task plan before execution.
+      Unauthorized use triggers UNAUTHORIZED_PROVISION hard block — stop and confirm.
 
 ## Useful Diagnostic Queries
 
