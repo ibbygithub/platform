@@ -19,14 +19,14 @@ changes. Do not remove entries without verifying the state has changed.
 
 ### svcnode-01 Deployment State
 
-- **Firecrawl** (`/opt/firecrawl`): root:root owned — devops-agent CANNOT
-  read `.env`, run git commands, or modify configs. Runs on `backend` Docker
+- **Firecrawl** (`/opt/firecrawl`): Ownership: devops-agent:devops-agent — transferred
+  2026-03-06. devops-agent can now manage firecrawl configs. Runs on `backend` Docker
   network (NOT `platform_net`). Traefik does NOT proxy firecrawl.
   Host port 3002 is the access path. See: `01-infrastructure.md` exceptions table.
 
-- **Scraper → Firecrawl URL**: Deployed `FIRECRAWL_API_URL` value is UNVERIFIED.
-  Default code value (`http://firecrawl-api:3002`) will NOT work cross-network.
-  Do not assume connectivity is working without checking the deployed `.env`.
+- **Scraper → Firecrawl URL**: `FIRECRAWL_API_URL=http://host.docker.internal:3002`
+  (HOST_IP pattern, intentional). Verified WORKING 2026-03-06. Default code value
+  (`http://firecrawl-api:3002`) would NOT work cross-network — deployed value is correct.
 
 - **Shogun checkout** (`/opt/git/work/shogun`): As of 2026-03-06, the working
   tree on svcnode-01 is on branch `feature/gateway-pure-search-endpoints` with
@@ -50,7 +50,7 @@ changes. Do not remove entries without verifying the state has changed.
 
 - Google Places routing: `platform_v1.places` vs `shogun_v1.places` — entangled
 - MCP deployment: mcp_shogun dormant, mcp_group grants in place but unused
-- Firecrawl network isolation: backend vs platform_net — connection path unverified
+- Firecrawl connection: `http://host.docker.internal:3002` (HOST_IP pattern, intentional). Verified WORKING 2026-03-06.
 
 ### Step 1 — Load Platform Rules (in order)
 
