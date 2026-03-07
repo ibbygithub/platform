@@ -78,7 +78,7 @@ paths as a pattern to follow.
 
 | Service | Actual Path | Node | Exception Reason |
 |:---|:---|:---|:---|
-| Firecrawl | `/opt/firecrawl` | svcnode-01 | Installed via upstream Docker Compose repo before path standard was codified. Root-owned `.env`. Migration risk exceeds benefit. Exception approved 2026-03-05. **Ownership:** entire `/opt/firecrawl/` is root:root — devops-agent cannot read `.env`, run git commands, or modify configs. **Network:** firecrawl containers join `backend` Docker network only, NOT `platform_net`. Host port 3002 is the only access path. |
+| Firecrawl | `/opt/firecrawl` | svcnode-01 | Installed via upstream Docker Compose repo before path standard was codified. Migration risk exceeds benefit. Exception approved 2026-03-05. **Ownership:** devops-agent:devops-agent — transferred 2026-03-06. devops-agent can now read `.env` and run git commands. **Network:** firecrawl containers join `backend` Docker network only, NOT `platform_net`. Host port 3002 is the only access path. Scraper reaches firecrawl via `http://host.docker.internal:3002` (HOST_IP pattern, verified WORKING 2026-03-06). |
 
 **All new services must comply with the standard path.** This list is for
 legacy services only and will not grow without explicit sign-off.
