@@ -4,12 +4,14 @@
 
 ### svcnode-01 (192.168.71.220)
 - Runs: Docker containers, Traefik reverse proxy, all API gateways and enterprise services
-- Does NOT: store persistent data, host application logic, run cron jobs
+- Does NOT: store application data, host platform application logic, run cron jobs
+- Note: `/opt/logstack/` stores Grafana Alloy + Loki log data on this node.
+  This is node-resident observability infrastructure, not platform application data.
 - Persona required: `devops-agent`
 - If a task asks you to store database data on svcnode-01 → HARD BLOCK (cross-node violation)
 
 ### dbnode-01 (192.168.71.221)
-- Runs: PostgreSQL `shogun_v1` exclusively
+- Runs: PostgreSQL 17.7 — six application databases (platform_v1, shogun_v1, mltrader, n8n, automation_sandbox_test) plus postgres system database
 - Does NOT: run Docker, host applications, serve APIs
 - Persona required: `dba-agent`
 - If a task asks you to run Docker on dbnode-01 → HARD BLOCK (cross-node violation)
@@ -76,7 +78,7 @@ paths as a pattern to follow.
 
 | Service | Actual Path | Node | Exception Reason |
 |:---|:---|:---|:---|
-| Firecrawl | `/opt/firecrawl` | svcnode-01 | Installed via upstream Docker Compose repo before path standard was codified. Root-owned `.env`. Migration risk exceeds benefit. Exception approved 2026-03-05. |
+| Firecrawl | `/opt/firecrawl` | svcnode-01 | Installed via upstream Docker Compose repo before path standard was codified. Root-owned `.env`. Migration risk exceeds benefit. Exception approved 2026-03-05. **Ownership:** entire `/opt/firecrawl/` is root:root — devops-agent cannot read `.env`, run git commands, or modify configs. **Network:** firecrawl containers join `backend` Docker network only, NOT `platform_net`. Host port 3002 is the only access path. |
 
 **All new services must comply with the standard path.** This list is for
 legacy services only and will not grow without explicit sign-off.
