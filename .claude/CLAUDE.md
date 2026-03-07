@@ -11,6 +11,47 @@ These are behavioral directives, not suggestions.
 Before accepting any task instruction, the agent must complete the following
 orientation sequence in full. This is not optional and may not be abbreviated.
 
+## Known Infrastructure State — Last Verified 2026-03-06
+
+This section captures confirmed infrastructure facts that future agents
+should be aware of at session start. Update this section when the state
+changes. Do not remove entries without verifying the state has changed.
+
+### svcnode-01 Deployment State
+
+- **Firecrawl** (`/opt/firecrawl`): root:root owned — devops-agent CANNOT
+  read `.env`, run git commands, or modify configs. Runs on `backend` Docker
+  network (NOT `platform_net`). Traefik does NOT proxy firecrawl.
+  Host port 3002 is the access path. See: `01-infrastructure.md` exceptions table.
+
+- **Scraper → Firecrawl URL**: Deployed `FIRECRAWL_API_URL` value is UNVERIFIED.
+  Default code value (`http://firecrawl-api:3002`) will NOT work cross-network.
+  Do not assume connectivity is working without checking the deployed `.env`.
+
+- **Shogun checkout** (`/opt/git/work/shogun`): As of 2026-03-06, the working
+  tree on svcnode-01 is on branch `feature/gateway-pure-search-endpoints` with
+  2 commits not present in `main`. Deployment branch state is UNRESOLVED.
+
+- **Logstack** (`/opt/logstack/`): Intentionally node-resident. Loki + Grafana
+  + Grafana Alloy are deployed directly at `/opt/logstack/` and NOT tracked in
+  the platform git repo. This is by design. Do not attempt to add logstack to
+  the platform compose or repo.
+
+### dbnode-01 Database State
+
+- All 6 application databases are active (platform_v1, shogun_v1, mltrader,
+  n8n, automation_sandbox_test)
+- pg_stat_statements installed per-database (not global) — verified 2026-03-06
+- pgvector 0.8.1 installed in platform_v1, shogun_v1, mltrader — verified 2026-03-06
+- pgcrypto installed in shogun_v1 only — no columns currently encrypted
+- dba-agent holds CREATEROLE + CREATEDB — UNAUTHORIZED_PROVISION hard block applies
+
+### Open Architecture Decisions (Do Not Resolve Without Human Direction)
+
+- Google Places routing: `platform_v1.places` vs `shogun_v1.places` — entangled
+- MCP deployment: mcp_shogun dormant, mcp_group grants in place but unused
+- Firecrawl network isolation: backend vs platform_net — connection path unverified
+
 ### Step 1 — Load Platform Rules (in order)
 
 Read each of the following files completely before proceeding:
