@@ -76,6 +76,13 @@ Do not begin any task work until the human has responded.
 
 ---
 
+## Agent Permission Boundaries
+
+SSH, git push, and worktree operations are governed by `.claude/settings.json`.
+Review this file at session start if encountering unexpected permission prompts.
+
+---
+
 ## Two-Stage Task Plan Approval
 
 Every task follows a two-stage approval process before any code, file, or
