@@ -1,0 +1,5 @@
+.env
+data/embeddings.db
+data/uploads/
+__pycache__/
+*.pyc
