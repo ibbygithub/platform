@@ -281,14 +281,7 @@
 
     <!-- ── Extract mode ── -->
     <div id="scraper-panel-extract" class="scraper-panel hidden">
-      <p class="text-xs text-gray-400 mb-2">Use an LLM to extract structured information from one or more URLs. Provide a plain-English prompt describing what to extract.</p>
-      <div class="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">
-        <strong>Status: Degraded.</strong> Extract requires an <code>OPENAI_API_KEY</code> or
-        <code>OLLAMA_BASE_URL</code> configured in the Firecrawl container on svcnode-01.
-        Neither is currently set. Requests will fail with a Firecrawl error.
-        To fix: add <code>OPENAI_API_KEY</code> to <code>/opt/firecrawl/.env</code> on svcnode-01
-        and recreate the containers.
-      </div>
+      <p class="text-xs text-gray-400 mb-3">Use an LLM to extract structured information from one or more URLs. Provide a plain-English prompt describing what to extract.</p>
       <textarea id="extract-urls" rows="3" placeholder="https://example.com/product/123&#10;https://example.com/product/456"
                 class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 font-mono resize-y"></textarea>
       <textarea id="extract-prompt" rows="3" placeholder="Extract: product name, price, rating, key features, and availability status."

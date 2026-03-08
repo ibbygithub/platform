@@ -8,6 +8,7 @@ URL:  http://localhost:8000
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
@@ -179,6 +180,14 @@ async def api_scraper_crawl(request: Request):
         raise HTTPException(status_code=400, detail="max_depth must be 1–10")
     if not 1 <= limit <= 100:
         raise HTTPException(status_code=400, detail="limit must be 1–100")
+
+    # Firecrawl treats maxDepth as absolute from domain root, not relative to
+    # the start URL. Auto-raise max_depth so URLs with deep paths don't fail
+    # with "URL depth exceeds the specified maxDepth".
+    url_segments = [s for s in urlparse(url).path.split("/") if s]
+    url_own_depth = len(url_segments)
+    if url_own_depth > max_depth:
+        max_depth = url_own_depth + 1  # allow at least one level deeper than start
 
     try:
         result = services.crawl_url(url, max_depth=max_depth, limit=limit)
