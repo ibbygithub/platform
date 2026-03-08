@@ -170,6 +170,10 @@ async def api_places_search(request: Request):
         raise HTTPException(status_code=400, detail="Missing: query")
 
     # Geocode if location string provided; otherwise fall back to explicit lat/lng
+    min_rating = body.get("min_rating")  # optional float, e.g. 4.7
+    if min_rating is not None:
+        min_rating = float(min_rating)
+
     if location:
         try:
             lat, lng = services.geocode(location)
@@ -178,9 +182,22 @@ async def api_places_search(request: Request):
     elif lat is None or lng is None:
         raise HTTPException(status_code=400, detail="Provide a location (e.g. 'Tokyo, Japan') or explicit lat/lng")
 
+    # Fetch more candidates when filtering by rating so we have enough to work with
+    fetch_count = min(20, max_res * 4) if min_rating is not None else max_res
     try:
-        places = services.places_search(query, float(lat), float(lng), radius_m, max_res)
+        places = services.places_search(query, float(lat), float(lng), radius_m, fetch_count)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Places error: {e}")
 
-    return {"places": places, "resolved_location": {"lat": lat, "lng": lng}}
+    if min_rating is not None:
+        places = [p for p in places if (p.get("rating") or 0) >= min_rating]
+
+    places = places[:max_res]
+
+    return {
+        "places": places,
+        "resolved_location": {"lat": lat, "lng": lng},
+        "total_fetched": fetch_count,
+        "after_filter": len(places),
+        "min_rating_applied": min_rating,
+    }

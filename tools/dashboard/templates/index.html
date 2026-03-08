@@ -120,21 +120,51 @@
   <div id="tab-places" class="tab-pane">
     <h2 class="text-base font-semibold mb-4">Google Places Search</h2>
     <div class="flex flex-col gap-2 mb-4">
-      <input id="places-query" type="text" placeholder="What are you looking for?  e.g. best ramen"
+      <input id="places-query" type="text" placeholder="What are you looking for?  e.g. anime stores"
              class="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
              onkeydown="if(event.key==='Enter') runPlaces()" />
-      <div class="flex gap-2">
-        <input id="places-location" type="text" placeholder="Where?  e.g. Tokyo, Japan"
-               class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+      <div class="flex gap-2 flex-wrap">
+        <input id="places-location" type="text" placeholder="Where?  e.g. Akihabara, Tokyo"
+               class="flex-1 min-w-40 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                onkeydown="if(event.key==='Enter') runPlaces()" />
         <input id="places-radius" type="number" value="5000" placeholder="Radius (m)"
-               class="w-32 border rounded px-3 py-2 text-sm focus:outline-none" />
+               class="w-28 border rounded px-3 py-2 text-sm focus:outline-none" title="Search radius in metres" />
+        <div class="flex items-center gap-1 border rounded px-3 py-2 bg-white">
+          <span class="text-xs text-gray-500 whitespace-nowrap">Min rating</span>
+          <input id="places-min-rating" type="number" min="1" max="5" step="0.1" placeholder="e.g. 4.7"
+                 class="w-16 text-sm focus:outline-none text-right" />
+        </div>
         <button onclick="runPlaces()"
                 class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Search</button>
       </div>
     </div>
-    <div id="places-status" class="text-sm text-gray-500 mb-2 hidden"></div>
-    <div id="places-results" class="space-y-2"></div>
+    <div id="places-status" class="text-sm text-gray-500 mb-3 hidden"></div>
+
+    <!-- Field reference -->
+    <details class="mb-4 border rounded-lg bg-gray-50">
+      <summary class="text-xs font-medium text-gray-500 px-3 py-2 cursor-pointer">Available data fields (click to expand)</summary>
+      <div class="p-3 text-xs text-gray-600 grid grid-cols-2 gap-x-6 gap-y-1">
+        <div><span class="font-medium text-green-700">displayName</span> — place name</div>
+        <div><span class="font-medium text-green-700">formattedAddress</span> — full address</div>
+        <div><span class="font-medium text-green-700">rating</span> — 1.0–5.0 star average</div>
+        <div><span class="font-medium text-green-700">userRatingCount</span> — number of reviews</div>
+        <div><span class="font-medium text-green-700">types</span> — place category tags</div>
+        <div><span class="font-medium text-green-700">primaryType</span> — main category</div>
+        <div><span class="font-medium text-green-700">googleMapsUri</span> — Maps link</div>
+        <div><span class="font-medium text-green-700">location</span> — lat/lng</div>
+        <div class="col-span-2 mt-1 font-medium text-gray-500">Requires gateway field mask update to expose:</div>
+        <div><span class="font-medium text-yellow-700">websiteUri</span> — business website</div>
+        <div><span class="font-medium text-yellow-700">nationalPhoneNumber</span> — local phone</div>
+        <div><span class="font-medium text-yellow-700">currentOpeningHours</span> — open now + hours</div>
+        <div><span class="font-medium text-yellow-700">businessStatus</span> — OPERATIONAL / CLOSED</div>
+        <div><span class="font-medium text-yellow-700">priceLevel</span> — $ to $$$$</div>
+        <div><span class="font-medium text-yellow-700">editorialSummary</span> — AI description</div>
+        <div><span class="font-medium text-yellow-700">photos</span> — photo references (up to 10)</div>
+        <div><span class="font-medium text-yellow-700">regularOpeningHours</span> — weekly schedule</div>
+      </div>
+    </details>
+
+    <div id="places-results" class="space-y-3"></div>
   </div>
 
 </main>
@@ -395,60 +425,101 @@ async function ingestScraped() {
 
 // ── Places ─────────────────────────────────────────────────────────────────
 async function runPlaces() {
-  const query    = document.getElementById('places-query').value.trim();
-  const location = document.getElementById('places-location').value.trim();
-  const radius   = document.getElementById('places-radius').value || 5000;
-  const status   = document.getElementById('places-status');
-  const results  = document.getElementById('places-results');
+  const query     = document.getElementById('places-query').value.trim();
+  const location  = document.getElementById('places-location').value.trim();
+  const radius    = document.getElementById('places-radius').value || 5000;
+  const minRating = document.getElementById('places-min-rating').value;
+  const status    = document.getElementById('places-status');
+  const results   = document.getElementById('places-results');
 
   if (!query)    { alert('Enter what you are looking for'); return; }
   if (!location) { alert('Enter a location (e.g. Tokyo, Japan)'); return; }
 
   status.className = 'text-sm text-blue-600';
   status.textContent = `Locating "${location}" and searching...`;
-  results.innerHTML  = '';
+  status.classList.remove('hidden');
+  results.innerHTML = '';
+
+  const payload = { query, location, radius_m: parseInt(radius), max_results: 10 };
+  if (minRating) payload.min_rating = parseFloat(minRating);
 
   try {
     const res  = await fetch('/api/places/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, location, radius_m: parseInt(radius), max_results: 10 }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
 
     const places = data.places || [];
-    const loc = data.resolved_location;
-    status.textContent = `${places.length} result(s) near ${location} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`;
+    const loc    = data.resolved_location;
+    let statusText = `${data.after_filter} result(s) near ${location} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`;
+    if (data.min_rating_applied != null)
+      statusText += ` — filtered to >= ${data.min_rating_applied} stars (from ${data.total_fetched} candidates)`;
+    status.textContent = statusText;
     status.className   = 'text-sm text-gray-500';
 
     if (!places.length) {
-      results.innerHTML = '<p class="text-gray-400 text-sm">No results returned.</p>';
+      results.innerHTML = `<p class="text-gray-400 text-sm">No results${data.min_rating_applied ? ` with rating >= ${data.min_rating_applied}` : ''} in this area. Try lowering the rating filter or increasing the radius.</p>`;
       return;
     }
 
-    results.innerHTML = places.map(p => {
-      const name    = p.displayName?.text || p.displayName || 'Unknown';
-      const address = p.formattedAddress || '';
-      const rating  = p.rating ? `${p.rating} (${p.userRatingCount || '?'} reviews)` : 'No rating';
-      const mapsUrl = p.googleMapsUri || '#';
+    results.innerHTML = places.map((p, i) => {
+      const name   = p.displayName?.text || p.displayName || 'Unknown';
+      const addr   = p.formattedAddress  || '';
+      const mapsUrl = p.googleMapsUri    || '#';
+      const rating  = p.rating    != null ? p.rating    : null;
+      const rCount  = p.userRatingCount  || 0;
+      const pType   = p.primaryType      || '';
+      const types   = (p.types || []).filter(t => t !== 'establishment' && t !== 'point_of_interest');
+
+      const ratingHtml = rating != null
+        ? `<span class="font-bold text-yellow-600">${rating}</span><span class="text-gray-400 text-xs"> / 5 &nbsp;(${rCount.toLocaleString()} reviews)</span>`
+        : '<span class="text-gray-400 text-xs">No rating</span>';
+
+      const starsHtml = rating != null ? renderStars(rating) : '';
+
+      const typesHtml = types.length
+        ? `<div class="flex flex-wrap gap-1 mt-2">${types.slice(0,6).map(t =>
+            `<span class="text-xs bg-blue-50 text-blue-600 border border-blue-100 rounded px-1.5 py-0.5">${t.replace(/_/g,' ')}</span>`
+          ).join('')}</div>`
+        : '';
+
       return `
         <div class="bg-white border rounded-lg p-4 shadow-sm">
-          <div class="flex items-start justify-between">
-            <div>
-              <p class="font-medium text-sm">${escHtml(name)}</p>
-              <p class="text-xs text-gray-500 mt-0.5">${escHtml(address)}</p>
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center mt-0.5">${i+1}</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-3">
+                <p class="font-semibold text-sm leading-tight">${escHtml(name)}</p>
+                <div class="text-right flex-shrink-0">
+                  <div>${ratingHtml}</div>
+                  <div class="text-xs">${starsHtml}</div>
+                </div>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">${escHtml(addr)}</p>
+              ${pType ? `<p class="text-xs text-gray-400 mt-0.5">Category: <span class="text-gray-600">${escHtml(pType.replace(/_/g,' '))}</span></p>` : ''}
+              ${typesHtml}
+              <a href="${escHtml(mapsUrl)}" target="_blank"
+                 class="text-xs text-blue-500 hover:underline mt-2 inline-block">View on Google Maps &rarr;</a>
             </div>
-            <span class="text-xs text-yellow-600 font-medium ml-4 whitespace-nowrap">${escHtml(rating)}</span>
           </div>
-          <a href="${escHtml(mapsUrl)}" target="_blank"
-             class="text-xs text-blue-500 hover:underline mt-1 inline-block">View on Maps</a>
         </div>`;
     }).join('');
   } catch (e) {
     status.className = 'text-sm text-red-600';
     status.textContent = `Error: ${e.message}`;
   }
+}
+
+function renderStars(rating) {
+  const full  = Math.floor(rating);
+  const half  = (rating - full) >= 0.5;
+  const empty = 5 - full - (half ? 1 : 0);
+  return '<span class="text-yellow-400">' + '&#9733;'.repeat(full) +
+    (half ? '<span style="opacity:0.5">&#9733;</span>' : '') +
+    '<span class="text-gray-300">' + '&#9733;'.repeat(empty) + '</span></span>';
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────
