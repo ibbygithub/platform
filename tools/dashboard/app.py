@@ -209,6 +209,56 @@ async def api_scraper_crawl(request: Request):
     }
 
 
+# ── Scraper: batch scrape ─────────────────────────────────────────────────────
+
+@app.post("/api/scraper/batch_scrape")
+async def api_scraper_batch(request: Request):
+    """
+    Scrape a list of URLs one at a time (sequential, Playwright-safe).
+    Returns per-URL results and a combined markdown string for RAG ingestion.
+    Max 30 URLs per request.
+    """
+    body      = await request.json()
+    urls      = body.get("urls") or []
+    wait_ms   = body.get("wait_for_ms")
+    max_urls  = min(int(body.get("max_urls") or 30), 50)
+
+    if isinstance(urls, str):
+        urls = [u.strip() for u in urls.split("\n") if u.strip()]
+
+    urls = [u.strip() for u in urls if u.strip()][:max_urls]
+
+    if not urls:
+        raise HTTPException(status_code=400, detail="Missing: urls")
+
+    results = []
+    for url in urls:
+        try:
+            scraped  = services.scrape_url(url, wait_for_ms=int(wait_ms) if wait_ms else None)
+            markdown = scraped.get("markdown") or scraped.get("content") or ""
+            title    = (scraped.get("metadata") or {}).get("title") or url
+            results.append({"url": url, "ok": True, "title": title,
+                             "markdown": markdown, "chars": len(markdown)})
+        except Exception as e:
+            results.append({"url": url, "ok": False, "error": str(e),
+                             "markdown": "", "chars": 0})
+
+    successful = [r for r in results if r["ok"] and r["markdown"]]
+    combined   = "\n\n---\n\n".join(
+        f"# {r['title']}\nSource: {r['url']}\n\n{r['markdown']}"
+        for r in successful
+    )
+
+    return {
+        "ok":               True,
+        "total":            len(urls),
+        "succeeded":        len(successful),
+        "failed":           len(results) - len(successful),
+        "results":          results,
+        "combined_markdown": combined,
+    }
+
+
 # ── Scraper: map ──────────────────────────────────────────────────────────────
 
 @app.post("/api/scraper/map")

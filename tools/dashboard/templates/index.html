@@ -247,15 +247,48 @@
             Switch to Crawl with this URL &rarr;
           </button>
         </div>
-        <div class="bg-white border rounded-lg overflow-hidden">
-          <div id="map-links" class="max-h-96 overflow-y-auto divide-y text-xs"></div>
+        <!-- Batch scrape controls (shown after map results) -->
+        <div id="map-batch-controls" class="hidden mt-3 bg-gray-50 border rounded-lg p-3 space-y-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-medium text-gray-600">Batch Scrape URLs:</span>
+            <input id="map-filter" type="text" placeholder="Filter URLs (e.g. /capabilities/devvit)"
+                   class="flex-1 min-w-48 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                   oninput="applyMapFilter()" />
+            <span id="map-filter-count" class="text-xs text-gray-400"></span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <input id="map-batch-limit" type="number" value="20" min="1" max="30"
+                   class="w-16 border rounded px-2 py-1 text-xs focus:outline-none text-center"
+                   title="Max URLs to scrape (max 30)" />
+            <label class="text-xs text-gray-500">max URLs (30 limit)</label>
+            <button onclick="runBatchScrape()"
+                    class="bg-purple-600 text-white px-3 py-1.5 rounded text-xs hover:bg-purple-700">
+              Batch Scrape Filtered
+            </button>
+            <button id="map-batch-ingest-btn" onclick="ingestBatch()" class="hidden text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100">
+              + Add all to RAG Index
+            </button>
+          </div>
+          <div id="map-batch-status" class="text-xs text-gray-500 hidden"></div>
+          <div id="map-batch-result" class="hidden space-y-1"></div>
+        </div>
+
+        <div class="bg-white border rounded-lg overflow-hidden mt-2">
+          <div id="map-links" class="max-h-72 overflow-y-auto divide-y text-xs"></div>
         </div>
       </div>
     </div>
 
     <!-- ── Extract mode ── -->
     <div id="scraper-panel-extract" class="scraper-panel hidden">
-      <p class="text-xs text-gray-400 mb-3">Use an LLM to extract structured information from one or more URLs. Provide a plain-English prompt describing what to extract.</p>
+      <p class="text-xs text-gray-400 mb-2">Use an LLM to extract structured information from one or more URLs. Provide a plain-English prompt describing what to extract.</p>
+      <div class="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">
+        <strong>Status: Degraded.</strong> Extract requires an <code>OPENAI_API_KEY</code> or
+        <code>OLLAMA_BASE_URL</code> configured in the Firecrawl container on svcnode-01.
+        Neither is currently set. Requests will fail with a Firecrawl error.
+        To fix: add <code>OPENAI_API_KEY</code> to <code>/opt/firecrawl/.env</code> on svcnode-01
+        and recreate the containers.
+      </div>
       <textarea id="extract-urls" rows="3" placeholder="https://example.com/product/123&#10;https://example.com/product/456"
                 class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 font-mono resize-y"></textarea>
       <textarea id="extract-prompt" rows="3" placeholder="Extract: product name, price, rating, key features, and availability status."
@@ -740,20 +773,23 @@ async function runMap() {
     document.getElementById('map-summary-line').textContent =
       `${data.total} URL(s) discovered on ${url}`;
 
-    const emptyHint   = document.getElementById('map-empty-hint');
-    const switchBtn   = document.getElementById('map-switch-crawl');
-    const linksEl     = document.getElementById('map-links');
-    const fewResults  = data.total <= 1;
+    const emptyHint    = document.getElementById('map-empty-hint');
+    const switchBtn    = document.getElementById('map-switch-crawl');
+    const linksEl      = document.getElementById('map-links');
+    const batchControls = document.getElementById('map-batch-controls');
+    const fewResults   = data.total <= 1;
 
     emptyHint.classList.toggle('hidden', !fewResults);
     switchBtn.classList.toggle('hidden', fewResults || data.total < 5);
+    batchControls.classList.toggle('hidden', fewResults);
 
-    linksEl.innerHTML = (data.links || []).map(link => `
-      <div class="px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2">
-        <span class="text-gray-300">&#8594;</span>
-        <a href="${escHtml(link)}" target="_blank"
-           class="text-blue-500 hover:underline truncate">${escHtml(link)}</a>
-      </div>`).join('');
+    // Store all links for filter/batch
+    _allMapLinks = data.links || [];
+    document.getElementById('map-filter').value = '';
+    document.getElementById('map-batch-result').classList.add('hidden');
+    document.getElementById('map-batch-status').classList.add('hidden');
+    document.getElementById('map-batch-ingest-btn').classList.add('hidden');
+    applyMapFilter();
 
     // Store the URL for switchMapToCrawl
     linksEl.dataset.sourceUrl = url;
@@ -768,6 +804,100 @@ async function runMap() {
       ? `<br/><span class="text-xs text-amber-700">Tip: this site may not have a sitemap.xml. Use <button onclick="switchMapToCrawl()" class="underline font-medium">Crawl mode</button> to discover links instead.</span>`
       : '';
     status.innerHTML = `Error: ${escHtml(errMsg)}${sitemapHint}`;
+  }
+}
+
+// ── Map: filter + batch scrape ───────────────────────────────────────────────
+
+let _allMapLinks  = [];
+let _batchCombined = '';
+let _batchFilename = '';
+
+function applyMapFilter() {
+  const filter  = (document.getElementById('map-filter').value || '').toLowerCase();
+  const linksEl = document.getElementById('map-links');
+  const countEl = document.getElementById('map-filter-count');
+  const visible = _allMapLinks.filter(l => !filter || l.toLowerCase().includes(filter));
+  linksEl.innerHTML = visible.map(link => `
+    <div class="px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2">
+      <span class="text-gray-300">&#8594;</span>
+      <a href="${escHtml(link)}" target="_blank"
+         class="text-blue-500 hover:underline truncate">${escHtml(link)}</a>
+    </div>`).join('');
+  const limit = parseInt(document.getElementById('map-batch-limit').value || 20);
+  countEl.textContent = `${visible.length} shown / ${_allMapLinks.length} total`;
+}
+
+async function runBatchScrape() {
+  const filter  = (document.getElementById('map-filter').value || '').toLowerCase();
+  const limit   = parseInt(document.getElementById('map-batch-limit').value || 20);
+  const urls    = _allMapLinks.filter(l => !filter || l.toLowerCase().includes(filter)).slice(0, limit);
+  const status  = document.getElementById('map-batch-status');
+  const result  = document.getElementById('map-batch-result');
+  const ingestBtn = document.getElementById('map-batch-ingest-btn');
+
+  if (!urls.length) { alert('No URLs match the current filter.'); return; }
+
+  _batchCombined = '';
+  _batchFilename = '';
+  status.className   = 'text-xs text-blue-600';
+  status.textContent = `Scraping ${urls.length} URL(s) one at a time... (this may take a while)`;
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+  ingestBtn.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/batch_scrape', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, max_urls: limit }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    _batchCombined = data.combined_markdown || '';
+    _batchFilename = 'devvit_docs_batch.md';
+
+    status.textContent = `Done: ${data.succeeded}/${data.total} scraped successfully` +
+      (data.failed ? ` (${data.failed} failed)` : '');
+    status.className = data.failed ? 'text-xs text-amber-600' : 'text-xs text-green-600';
+
+    result.innerHTML = (data.results || []).map(r => `
+      <div class="flex items-center gap-2 px-2 py-1 rounded ${r.ok ? 'bg-green-50' : 'bg-red-50'}">
+        <span class="${r.ok ? 'text-green-500' : 'text-red-400'}">${r.ok ? '&#10003;' : '&#10007;'}</span>
+        <span class="truncate text-gray-600 flex-1">${escHtml(r.title || r.url)}</span>
+        <span class="text-gray-400 flex-shrink-0">${r.ok ? r.chars.toLocaleString() + ' chars' : escHtml(r.error || 'failed')}</span>
+      </div>`).join('');
+    result.classList.remove('hidden');
+
+    if (_batchCombined) {
+      ingestBtn.textContent = '+ Add all to RAG Index';
+      ingestBtn.disabled = false;
+      ingestBtn.className = 'text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100';
+      ingestBtn.classList.remove('hidden');
+    }
+  } catch (e) {
+    status.className = 'text-xs text-red-600';
+    status.textContent = `Batch scrape error: ${e.message}`;
+  }
+}
+
+async function ingestBatch() {
+  if (!_batchCombined) return;
+  const btn = document.getElementById('map-batch-ingest-btn');
+  btn.textContent = 'Indexing...';
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/scraper/ingest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: _batchCombined, filename: _batchFilename }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    btn.textContent = `Indexed (${data.chunk_count} chunks)`;
+    btn.className = 'text-xs bg-gray-100 border text-gray-500 px-3 py-1 rounded cursor-default';
+  } catch (e) {
+    btn.textContent = `Failed: ${e.message}`;
+    btn.disabled = false;
   }
 }
 

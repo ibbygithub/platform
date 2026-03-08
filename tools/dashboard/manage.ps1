@@ -1,14 +1,11 @@
 # manage.ps1
-# IbbyTech Dashboard — process manager
+# IbbyTech Dashboard -- process manager
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File manage.ps1 start
 #   powershell -ExecutionPolicy Bypass -File manage.ps1 stop
 #   powershell -ExecutionPolicy Bypass -File manage.ps1 restart
 #   powershell -ExecutionPolicy Bypass -File manage.ps1 status
-#
-# Short form (from the dashboard directory):
-#   .\manage.ps1 start | stop | restart | status
 
 param (
     [Parameter(Position=0)]
@@ -20,8 +17,11 @@ $PORT       = 8000
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PID_FILE   = Join-Path $SCRIPT_DIR '.dashboard.pid'
 $LOG_FILE   = Join-Path $SCRIPT_DIR 'dashboard.log'
+$ERR_FILE   = Join-Path $SCRIPT_DIR 'dashboard.err.log'
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 function Get-StoredPid {
     if (Test-Path $PID_FILE) {
@@ -50,15 +50,14 @@ function Get-PortOwner {
     return $null
 }
 
-function Kill-Tree {
+function Stop-Tree {
     param([int]$Id)
-    # taskkill /T kills the process AND all child processes (covers uvicorn --reload workers)
-    $result = & taskkill /PID $Id /F /T 2>&1
-    return $result
+    # /T kills the process AND all child processes (covers uvicorn --reload workers)
+    & taskkill /PID $Id /F /T 2>&1 | Out-Null
 }
 
 function Wait-PortFree {
-    param([int]$Seconds = 5)
+    param([int]$Seconds = 6)
     for ($i = 0; $i -lt $Seconds; $i++) {
         if (-not (Get-PortOwner)) { return $true }
         Start-Sleep -Seconds 1
@@ -67,7 +66,7 @@ function Wait-PortFree {
 }
 
 function Wait-PortOpen {
-    param([int]$Seconds = 10)
+    param([int]$Seconds = 12)
     for ($i = 0; $i -lt $Seconds; $i++) {
         if (Get-PortOwner) { return $true }
         Start-Sleep -Seconds 1
@@ -75,15 +74,17 @@ function Wait-PortOpen {
     return $false
 }
 
-# ── Commands ──────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
 
 function Invoke-Status {
-    $storedPid  = Get-StoredPid
-    $portOwner  = Get-PortOwner
+    $storedPid = Get-StoredPid
+    $portOwner = Get-PortOwner
 
     Write-Host ""
-    Write-Host "  IbbyTech Dashboard — status" -ForegroundColor Cyan
-    Write-Host "  ────────────────────────────"
+    Write-Host "  IbbyTech Dashboard -- status" -ForegroundColor Cyan
+    Write-Host "  ----------------------------"
 
     if ($storedPid -and (Test-ProcessAlive $storedPid)) {
         Write-Host "  Status  : RUNNING" -ForegroundColor Green
@@ -91,13 +92,13 @@ function Invoke-Status {
         Write-Host "  URL     : http://localhost:$PORT"
         Write-Host "  Log     : $LOG_FILE"
     } elseif ($portOwner) {
-        Write-Host "  Status  : RUNNING (untracked — PID $portOwner owns port $PORT)" -ForegroundColor Yellow
+        Write-Host "  Status  : RUNNING (untracked -- PID $portOwner owns port $PORT)" -ForegroundColor Yellow
         Write-Host "  PID file: not found or stale"
         Write-Host "  URL     : http://localhost:$PORT"
     } else {
         Write-Host "  Status  : STOPPED" -ForegroundColor DarkGray
         if ($storedPid) {
-            Write-Host "  Note    : stale PID file found (PID $storedPid no longer alive)" -ForegroundColor DarkGray
+            Write-Host "  Note    : stale PID file (PID $storedPid no longer alive)" -ForegroundColor DarkGray
         }
     }
     Write-Host ""
@@ -111,7 +112,7 @@ function Invoke-Stop {
     if ($storedPid) {
         if (Test-ProcessAlive $storedPid) {
             Write-Host "  Stopping PID $storedPid (process tree)..." -ForegroundColor Yellow
-            Kill-Tree $storedPid | Out-Null
+            Stop-Tree $storedPid
         } else {
             Write-Host "  PID $storedPid is no longer alive (stale PID file)." -ForegroundColor DarkGray
         }
@@ -119,14 +120,14 @@ function Invoke-Stop {
     }
 
     # Kill any untracked process still holding the port
-    $portOwner = Get-PortOwner
-    if ($portOwner -and $portOwner -ne $storedPid) {
-        Write-Host "  Killing untracked PID $portOwner on port $PORT..." -ForegroundColor Yellow
-        Kill-Tree $portOwner | Out-Null
+    $after = Get-PortOwner
+    if ($after -and ($after -ne $storedPid)) {
+        Write-Host "  Killing untracked PID $after on port $PORT..." -ForegroundColor Yellow
+        Stop-Tree $after
     }
 
     if (Wait-PortFree) {
-        Write-Host "  Stopped. Port $PORT is now free." -ForegroundColor Green
+        Write-Host "  Stopped. Port $PORT is free." -ForegroundColor Green
     } else {
         Write-Host "  WARNING: port $PORT still in use after stop attempt." -ForegroundColor Red
     }
@@ -134,13 +135,12 @@ function Invoke-Stop {
 
 function Invoke-Start {
     # Ensure port is clear before starting
-    $portOwner = Get-PortOwner
-    if ($portOwner) {
-        Write-Host "  Port $PORT is in use (PID $portOwner). Stopping first..." -ForegroundColor Yellow
+    if (Get-PortOwner) {
+        Write-Host "  Port $PORT is in use. Stopping first..." -ForegroundColor Yellow
         Invoke-Stop
     }
 
-    # Verify uvicorn is available
+    # Verify uvicorn is on PATH
     $uvicorn = Get-Command uvicorn -ErrorAction SilentlyContinue
     if (-not $uvicorn) {
         Write-Host "  ERROR: uvicorn not found. Activate your venv first." -ForegroundColor Red
@@ -148,36 +148,37 @@ function Invoke-Start {
     }
 
     Write-Host "  Starting dashboard (background)..." -ForegroundColor Cyan
-    Write-Host "  Log: $LOG_FILE"
+    Write-Host "  Stdout : $LOG_FILE"
+    Write-Host "  Stderr : $ERR_FILE"
 
-    # Start uvicorn as a detached background process; redirect output to log file
     $proc = Start-Process `
-        -FilePath       $uvicorn.Source `
-        -ArgumentList   @("app:app", "--reload", "--port", "$PORT") `
-        -WorkingDirectory $SCRIPT_DIR `
+        -FilePath             $uvicorn.Source `
+        -ArgumentList         @("app:app", "--reload", "--port", "$PORT") `
+        -WorkingDirectory     $SCRIPT_DIR `
         -RedirectStandardOutput $LOG_FILE `
-        -RedirectStandardError  ($LOG_FILE -replace '\.log$', '.err.log') `
+        -RedirectStandardError  $ERR_FILE `
         -PassThru `
         -WindowStyle Hidden
 
     if (-not $proc) {
-        Write-Host "  ERROR: failed to start uvicorn." -ForegroundColor Red
+        Write-Host "  ERROR: Start-Process failed." -ForegroundColor Red
         exit 1
     }
 
-    # Save the launcher PID
-    $proc.Id | Out-File $PID_FILE -Force
+    # Persist the launcher PID
+    $proc.Id | Out-File $PID_FILE -Encoding ascii -Force
 
-    # Wait for the port to open
+    # Wait for uvicorn to bind the port
     if (Wait-PortOpen -Seconds 12) {
-        Write-Host "  STARTED — PID $($proc.Id) | http://localhost:$PORT" -ForegroundColor Green
+        Write-Host "  STARTED -- PID $($proc.Id) | http://localhost:$PORT" -ForegroundColor Green
     } else {
-        Write-Host "  WARNING: port $PORT did not open within 12 seconds." -ForegroundColor Yellow
-        Write-Host "  Check log: $LOG_FILE" -ForegroundColor Yellow
+        Write-Host "  WARNING: port $PORT did not open in 12s. Check $LOG_FILE" -ForegroundColor Yellow
     }
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 Write-Host ""
 switch ($Command) {
