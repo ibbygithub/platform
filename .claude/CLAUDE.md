@@ -66,7 +66,10 @@ and wait for human resolution before continuing.
 
 ### Step 2 — Git State Check
 
-Run the following commands and capture output:
+Run the following commands and capture output.
+**Important:** Run each as a separate Bash call — do NOT combine with `&&`.
+Each command individually matches an allow pattern in `settings.json`.
+Compound `&&` chains bypass pattern matching and trigger permission prompts.
 
 ```bash
 git status
