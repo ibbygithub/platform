@@ -132,12 +132,35 @@ async def api_scrape(request: Request):
     return {"raw": markdown, "summary": summary}
 
 
+# ── Scraper ingest ────────────────────────────────────────────────────────────
+
+@app.post("/api/scraper/ingest")
+async def api_scraper_ingest(request: Request):
+    """Ingest previously scraped markdown content into the RAG document index."""
+    body     = await request.json()
+    content  = (body.get("content") or "").strip()
+    filename = (body.get("filename") or "scraped.md").strip()
+
+    if not content:
+        raise HTTPException(status_code=400, detail="No content to ingest")
+
+    try:
+        result = rag.ingest_document(filename, content.encode("utf-8"))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
+
+    return result
+
+
 # ── Places ────────────────────────────────────────────────────────────────────
 
 @app.post("/api/places/search")
 async def api_places_search(request: Request):
     body      = await request.json()
     query     = (body.get("query") or "").strip()
+    location  = (body.get("location") or "").strip()
     lat       = body.get("lat")
     lng       = body.get("lng")
     radius_m  = int(body.get("radius_m") or 5000)
@@ -145,12 +168,19 @@ async def api_places_search(request: Request):
 
     if not query:
         raise HTTPException(status_code=400, detail="Missing: query")
-    if lat is None or lng is None:
-        raise HTTPException(status_code=400, detail="Missing: lat / lng")
+
+    # Geocode if location string provided; otherwise fall back to explicit lat/lng
+    if location:
+        try:
+            lat, lng = services.geocode(location)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not geocode location '{location}': {e}")
+    elif lat is None or lng is None:
+        raise HTTPException(status_code=400, detail="Provide a location (e.g. 'Tokyo, Japan') or explicit lat/lng")
 
     try:
         places = services.places_search(query, float(lat), float(lng), radius_m, max_res)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Places error: {e}")
 
-    return {"places": places}
+    return {"places": places, "resolved_location": {"lat": lat, "lng": lng}}

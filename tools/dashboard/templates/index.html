@@ -97,9 +97,16 @@
       <button onclick="runScraper()"
               class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Scrape</button>
     </div>
+    <div id="scraper-status" class="text-sm text-gray-500 mb-3 hidden"></div>
     <div id="scraper-result" class="hidden">
       <div class="bg-white border rounded-lg p-4 mb-3">
-        <h3 class="text-sm font-semibold text-gray-700 mb-2">Summary</h3>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-gray-700">Summary</h3>
+          <button id="scraper-ingest-btn" onclick="ingestScraped()"
+                  class="text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100">
+            + Add to RAG Index
+          </button>
+        </div>
         <div id="scraper-summary" class="text-sm text-gray-800 whitespace-pre-line"></div>
       </div>
       <details class="bg-gray-50 border rounded-lg p-3">
@@ -107,25 +114,25 @@
         <pre id="scraper-raw" class="text-xs text-gray-600 mt-2 max-h-64 overflow-y-auto"></pre>
       </details>
     </div>
-    <div id="scraper-status" class="text-sm text-gray-500 hidden"></div>
   </div>
 
   <!-- ── Tab: Places ── -->
   <div id="tab-places" class="tab-pane">
     <h2 class="text-base font-semibold mb-4">Google Places Search</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-      <input id="places-query" type="text" placeholder="e.g. best ramen"
-             class="col-span-1 sm:col-span-3 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+    <div class="flex flex-col gap-2 mb-4">
+      <input id="places-query" type="text" placeholder="What are you looking for?  e.g. best ramen"
+             class="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
              onkeydown="if(event.key==='Enter') runPlaces()" />
-      <input id="places-lat" type="number" step="any" placeholder="Latitude  e.g. 35.6762"
-             class="border rounded px-3 py-2 text-sm focus:outline-none" />
-      <input id="places-lng" type="number" step="any" placeholder="Longitude  e.g. 139.6503"
-             class="border rounded px-3 py-2 text-sm focus:outline-none" />
-      <input id="places-radius" type="number" value="5000" placeholder="Radius (m)"
-             class="border rounded px-3 py-2 text-sm focus:outline-none" />
+      <div class="flex gap-2">
+        <input id="places-location" type="text" placeholder="Where?  e.g. Tokyo, Japan"
+               class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+               onkeydown="if(event.key==='Enter') runPlaces()" />
+        <input id="places-radius" type="number" value="5000" placeholder="Radius (m)"
+               class="w-32 border rounded px-3 py-2 text-sm focus:outline-none" />
+        <button onclick="runPlaces()"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Search</button>
+      </div>
     </div>
-    <button onclick="runPlaces()"
-            class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 mb-4">Search</button>
     <div id="places-status" class="text-sm text-gray-500 mb-2 hidden"></div>
     <div id="places-results" class="space-y-2"></div>
   </div>
@@ -325,12 +332,17 @@ function clearChat() {
 }
 
 // ── Scraper ────────────────────────────────────────────────────────────────
+let _lastScrapedContent = '';
+let _lastScrapedFilename = '';
+
 async function runScraper() {
   const url    = document.getElementById('scraper-url').value.trim();
   const status = document.getElementById('scraper-status');
   const result = document.getElementById('scraper-result');
   if (!url) return;
 
+  _lastScrapedContent  = '';
+  _lastScrapedFilename = '';
   status.className = 'text-sm text-blue-600';
   status.textContent = 'Scraping... (may take 10-30s)';
   result.classList.add('hidden');
@@ -344,9 +356,15 @@ async function runScraper() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
 
+    _lastScrapedContent  = data.raw;
+    _lastScrapedFilename = url.replace(/^https?:\/\//, '').replace(/[^a-z0-9]/gi, '_').slice(0, 60) + '.md';
+
     document.getElementById('scraper-summary').textContent = data.summary;
     document.getElementById('scraper-raw').textContent     = data.raw;
+    document.getElementById('scraper-ingest-btn').textContent = '+ Add to RAG Index';
+    document.getElementById('scraper-ingest-btn').disabled = false;
     result.classList.remove('hidden');
+    status.className = 'text-sm text-gray-500';
     status.textContent = '';
   } catch (e) {
     status.className = 'text-sm text-red-600';
@@ -354,34 +372,54 @@ async function runScraper() {
   }
 }
 
+async function ingestScraped() {
+  if (!_lastScrapedContent) return;
+  const btn = document.getElementById('scraper-ingest-btn');
+  btn.textContent = 'Indexing...';
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/scraper/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: _lastScrapedContent, filename: _lastScrapedFilename }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    btn.textContent = `Indexed (${data.chunk_count} chunks)`;
+    btn.className = 'text-xs bg-gray-100 border text-gray-500 px-3 py-1 rounded cursor-default';
+  } catch (e) {
+    btn.textContent = `Failed: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
 // ── Places ─────────────────────────────────────────────────────────────────
 async function runPlaces() {
-  const query   = document.getElementById('places-query').value.trim();
-  const lat     = document.getElementById('places-lat').value;
-  const lng     = document.getElementById('places-lng').value;
-  const radius  = document.getElementById('places-radius').value || 5000;
-  const status  = document.getElementById('places-status');
-  const results = document.getElementById('places-results');
+  const query    = document.getElementById('places-query').value.trim();
+  const location = document.getElementById('places-location').value.trim();
+  const radius   = document.getElementById('places-radius').value || 5000;
+  const status   = document.getElementById('places-status');
+  const results  = document.getElementById('places-results');
 
-  if (!query)      { alert('Enter a search query'); return; }
-  if (!lat || !lng){ alert('Latitude and longitude are required'); return; }
+  if (!query)    { alert('Enter what you are looking for'); return; }
+  if (!location) { alert('Enter a location (e.g. Tokyo, Japan)'); return; }
 
   status.className = 'text-sm text-blue-600';
-  status.textContent = 'Searching...';
+  status.textContent = `Locating "${location}" and searching...`;
   results.innerHTML  = '';
 
   try {
     const res  = await fetch('/api/places/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, lat: parseFloat(lat), lng: parseFloat(lng),
-                             radius_m: parseInt(radius), max_results: 10 }),
+      body: JSON.stringify({ query, location, radius_m: parseInt(radius), max_results: 10 }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
 
     const places = data.places || [];
-    status.textContent = `${places.length} result(s)`;
+    const loc = data.resolved_location;
+    status.textContent = `${places.length} result(s) near ${location} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`;
     status.className   = 'text-sm text-gray-500';
 
     if (!places.length) {

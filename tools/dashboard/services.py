@@ -77,6 +77,23 @@ def places_search(text_query: str, lat: float, lng: float,
     return data.get("data", {}).get("places", [])
 
 
+# ── Geocoding ─────────────────────────────────────────────────────────────────
+
+def geocode(location: str) -> tuple[float, float]:
+    """Convert a location string to (lat, lng) via Nominatim (no API key required)."""
+    resp = requests.get(
+        "https://nominatim.openstreetmap.org/search",
+        params={"q": location, "format": "json", "limit": 1},
+        headers={"User-Agent": "IbbyTech-Platform-Dashboard/1.0"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    results = resp.json()
+    if not results:
+        raise ValueError(f"Could not find location: {location!r}")
+    return float(results[0]["lat"]), float(results[0]["lon"])
+
+
 # ── Health checks ─────────────────────────────────────────────────────────────
 
 def _ping(name: str, url: str, timeout: int = 5) -> dict:
