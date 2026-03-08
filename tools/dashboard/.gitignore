@@ -3,3 +3,7 @@ data/embeddings.db
 data/uploads/
 __pycache__/
 *.pyc
+.dashboard.pid
+dashboard.log
+dashboard.err.log
+dashboard_transactions.log
