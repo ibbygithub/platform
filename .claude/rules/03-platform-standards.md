@@ -85,3 +85,40 @@ Use: claude --add-dir ../platform
 
 This gives Claude Code sessions in that project full access to the platform
 service index and rules without duplicating content.
+
+---
+
+## PowerShell Operation Zone Classification
+
+PowerShell commands run on ibbytech-laptop (Windows control plane).
+Zone determines agent autonomy, same model as git and SSH operations.
+
+### Green Zone — Agent Acts Autonomously
+
+Read-only and diagnostic operations. No state change.
+
+- Process inspection: `Get-Process`, `Get-Service`
+- Network diagnostics: `Test-Connection`, `Test-NetConnection`, `Get-NetTCPConnection`
+- File system reads: `Get-Content`, `Get-ChildItem`, `Test-Path`, `Measure-Object`
+- Dashboard status: `.\manage.ps1 status`
+- Port checks: `Test-NetConnection -Port <n>`
+- Environment reads: `$env:VAR` (do not log sensitive values)
+
+### Yellow Zone — Agent Proposes, Human Confirms
+
+Write operations that change state but are reversible.
+Under Session Autonomy Mode these proceed automatically with narration.
+
+- Dashboard lifecycle: `.\manage.ps1 start`, `.\manage.ps1 stop`, `.\manage.ps1 restart`
+- File writes: `Set-Content`, `New-Item`, `Copy-Item`
+- Package installs: `pip install`, `npm install`
+- SSH session initiation to remote nodes (persona rules still apply)
+
+### Red Zone — Human Only
+
+Destructive or irreversible operations. Agent stops and hands off completely.
+
+- `Remove-Item -Recurse -Force` on any path
+- Credential operations: reading or writing SSH keys, tokens, `.env` files
+- Registry changes
+- Any PowerShell that invokes an external system-level installer

@@ -162,6 +162,9 @@ carry no risk to shared state.
 - `git stash`, `git stash pop`
 - `git worktree add` (with compliant naming)
 - `git fetch` (read-only remote sync)
+- `git push origin develop` when all new commits since last push are type `docs` or `chore`
+  AND touch only: `outputs/`, `services/*/README*`, `.claude/services/`,
+  `.claude/databases/`, or `outputs/planning/`
 
 ### Yellow Zone — Agent Proposes, Human Confirms
 
@@ -169,11 +172,17 @@ Agent prepares the operation, presents the Merge Ready notice, and waits.
 Human responds `proceed` or `hold`. No timeout — agent waits indefinitely.
 
 - `git merge` (feature → develop)
-- `git push` (any branch to remote)
+- `git push` (feature branch pushes, and any develop push not covered by Green Zone docs exemption)
 - `git worktree remove`
 - `git branch -d` (delete local branch post-merge)
 - `git tag`
 - `git rebase` (only on unshared branches)
+- `git push origin --delete <branch>` when ALL conditions are verified:
+  1. `git log --oneline origin/<branch> ^develop` returns empty (fully merged)
+  2. Branch is NOT: `master`, `develop`, `main`, or matching `svcnode/*`
+  3. Human has confirmed cleanup intent in the current session
+
+  Agent must state the merge verification result before executing.
 
 ### Red Zone — Human Only
 
@@ -186,7 +195,11 @@ Agent does not execute these under any circumstances.
 - `git branch -D` (force delete)
 - Any operation on `main` branch directly
 - `git remote set-url` or any remote configuration change
-- Deletion of remote branches
+- `git push origin --delete master`
+- `git push origin --delete develop`
+- `git push origin --delete main`
+- Any remote branch delete where merge status cannot be verified
+- Any remote branch delete not satisfying all Yellow Zone conditions above
 
 ---
 
