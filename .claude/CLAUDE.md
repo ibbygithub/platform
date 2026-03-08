@@ -129,7 +129,22 @@ Review this file at session start if encountering unexpected permission prompts.
 Every task follows a two-stage approval process before any code, file, or
 configuration is created or modified.
 
-No exceptions. A task that skips either stage is a protocol violation.
+### Lightweight Task Exemption
+
+Stage 2 is NOT required when ALL of the following are true:
+
+- Scope is limited to `tools/dashboard/`, `outputs/`, or service docs in `services/`
+- No SSH access to any remote node (svcnode-01, dbnode-01, brainnode-01)
+- No changes to `docker-compose.yml`, `.env`, Traefik config, or any infrastructure file
+- No changes to `.claude/CLAUDE.md` or any `.claude/rules/` file
+- Fully reversible — file edits or additions only, no database operations
+
+For lightweight tasks, the agent states intent in one line before acting:
+> "Lightweight task — proceeding: [plain English description of what and why]"
+
+Evidence write at completion is still required. All other rules still apply.
+
+For all other tasks, the full two-stage process is mandatory. No exceptions.
 
 ---
 
@@ -219,6 +234,65 @@ Once execution begins, the agent operates within the approved plan boundary.
 
 If a task requires touching a node or persona not in the approved plan,
 treat it as a new task requiring its own two-stage approval.
+
+---
+
+## Session Autonomy Mode
+
+The human may grant session-level autonomy to reduce approval friction for a
+known, trusted scope of work.
+
+### Activating Autonomy
+
+Session autonomy is active when the human says any of the following:
+- "approve all actions"
+- "approve all commands"
+- "approve you for all actions"
+- "full autonomy"
+- "just do it"
+- "go ahead with everything"
+
+### Scope-Qualified Autonomy
+
+The human may qualify autonomy to a specific task:
+> "approve all commands to get telegram gateway working"
+> "go ahead with everything for the dashboard fix"
+
+When a scope qualifier is present, autonomy applies only within that task's
+declared scope. Autonomy deactivates automatically when that task completes.
+When no qualifier is present, autonomy covers the full session until deactivated.
+
+### What Changes Under Autonomy
+
+| Normally requires approval | Under autonomy |
+|:---|:---|
+| Stage 2 execution plan — wait for proceed | Agent shows plan, proceeds immediately |
+| Yellow Zone git ops — wait for proceed | Agent narrates action, proceeds immediately |
+| Yellow Zone SSH ops — wait for proceed | Agent narrates action, proceeds immediately |
+| Yellow Zone PowerShell ops — wait for proceed | Agent narrates action, proceeds immediately |
+| Lightweight task statement | Unchanged — still proceeds |
+
+The agent narrates every significant action before taking it so the human
+can follow along and intervene at any time.
+
+### What Does NOT Change Under Autonomy
+
+- Red Zone git, SSH, and PowerShell operations — still blocked, no exceptions
+- Hard block triggers — still stop immediately
+- Scope discipline — autonomy covers the stated task scope only; expansion requires explicit instruction
+- Node SSH access — still requires stated persona
+- Stage 1 technology vetting — still required for new technologies
+- Evidence write at task completion — still required
+
+### Deactivating Autonomy
+
+Autonomy is deactivated when the human says:
+- "check with me", "pause", "hold", "stop and ask", "ask first"
+
+Autonomy is also automatically deactivated:
+- When a hard block is triggered
+- When scope expansion is detected
+- At the start of the next session — autonomy does not persist across sessions
 
 ---
 

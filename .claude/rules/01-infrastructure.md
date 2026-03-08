@@ -82,3 +82,44 @@ paths as a pattern to follow.
 
 **All new services must comply with the standard path.** This list is for
 legacy services only and will not grow without explicit sign-off.
+
+---
+
+## SSH Operation Zone Classification
+
+SSH commands to remote nodes follow the same zone model as git operations.
+Zone is determined by the nature of the command, not the node or persona.
+Persona assignment rules still apply in all zones.
+
+### Green Zone — Agent Acts Autonomously
+
+Read-only diagnostic commands. Zero state change, fully safe.
+
+- Container inspection: `docker ps`, `docker logs --tail N`, `docker inspect`
+- Service status: `systemctl status <name>`, `journalctl --tail N --no-pager`
+- File system reads: `ls`, `cat` on non-sensitive paths, `df -h`, `du -sh`
+- Process inspection: `ps aux`, `pgrep`, `top -bn1`
+- Network diagnostics: `curl -s <url>`, `ping -c 3`, `ss -tlnp`, `netstat`
+- Git read operations on remote checkouts: `git status`, `git log --oneline`
+- Environment verification: `echo $VAR` (do not log sensitive values)
+
+### Yellow Zone — Agent Proposes, Human Confirms
+
+Operational write commands. Reversible but affect running state.
+Under Session Autonomy Mode these proceed automatically with narration.
+
+- Container lifecycle: `docker restart`, `docker stop`, `docker start`
+- Service control: `systemctl restart`, `systemctl stop`, `systemctl start`
+- Compose operations: `docker-compose up -d`, `docker-compose restart`
+- Config file edits: any write to `.env`, `docker-compose.yml`, service configs
+- Remote git operations: `git pull`, `git checkout` on node checkouts
+
+### Red Zone — Human Only
+
+Destructive commands. Data loss possible. Agent stops and hands off completely.
+
+- `docker rm`, `docker rmi` — removes containers or images
+- `docker-compose down -v` — destroys volumes
+- `rm`, `rmdir` on any path on a remote node
+- Any destructive SQL — covered also by `05-database.md`
+- Any command the agent cannot fully characterize before running
