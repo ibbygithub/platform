@@ -89,7 +89,37 @@
 
   <!-- ── Tab: Scraper ── -->
   <div id="tab-scraper" class="tab-pane">
-    <h2 class="text-base font-semibold mb-3">Web Scraper</h2>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-base font-semibold">Web Scraper</h2>
+      <details class="relative">
+        <summary class="text-xs bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded cursor-pointer hover:bg-purple-100 select-none">
+          Quick tests &#9660;
+        </summary>
+        <div class="absolute right-0 mt-1 z-10 bg-white border rounded-lg shadow-lg p-3 w-80 space-y-2">
+          <p class="text-xs font-medium text-gray-600 mb-2">Reddit Devvit Docs</p>
+          <button onclick="quickTest('scrape','https://developers.reddit.com/docs/capabilities/devvit-web/devvit_web_configuration')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Scrape</span> — devvit_web_configuration
+          </button>
+          <button onclick="quickTest('crawl','https://developers.reddit.com/docs/capabilities/devvit-web/')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Crawl</span> — all devvit-web docs (depth 3, 30 pages)
+          </button>
+          <button onclick="quickTest('crawl','https://developers.reddit.com/docs/')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Crawl</span> — full devvit docs (depth 3, 50 pages)
+          </button>
+          <button onclick="quickTest('map','https://developers.reddit.com/docs/')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Map</span> — discover all devvit doc URLs
+          </button>
+          <button onclick="quickTest('extract','https://developers.reddit.com/docs/capabilities/devvit-web/devvit_web_configuration')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Extract</span> — devvit config properties &amp; types
+          </button>
+        </div>
+      </details>
+    </div>
 
     <!-- Mode selector -->
     <div class="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
@@ -196,18 +226,69 @@
         <button onclick="runMap()"
                 class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Map</button>
       </div>
+      <div class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
+        <strong>Note:</strong> Map works best on sites with a <code>sitemap.xml</code>.
+        Sites without one may return only the root URL.
+        For full link discovery on any site, use <strong>Crawl</strong> mode instead.
+      </div>
       <div id="map-status" class="text-sm text-gray-500 mb-3 hidden"></div>
       <div id="map-result" class="hidden">
-        <p id="map-summary-line" class="text-sm text-gray-600 mb-2"></p>
-        <div class="bg-white border rounded-lg overflow-hidden">
-          <div id="map-links" class="max-h-96 overflow-y-auto divide-y text-xs"></div>
+        <div class="flex items-center justify-between mb-2">
+          <p id="map-summary-line" class="text-sm text-gray-600"></p>
+          <button id="map-switch-crawl" onclick="switchMapToCrawl()" class="hidden text-xs bg-blue-50 border border-blue-200 text-blue-600 px-3 py-1 rounded hover:bg-blue-100">
+            Switch to Crawl &rarr;
+          </button>
+        </div>
+        <div id="map-empty-hint" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700 mb-3">
+          <p class="font-medium mb-1">No URLs discovered via sitemap.</p>
+          <p class="text-xs">This site either has no <code>sitemap.xml</code> or it&#x2019;s not accessible.
+             Switch to <strong>Crawl</strong> mode to discover links by following page links instead.</p>
+          <button onclick="switchMapToCrawl()" class="mt-2 text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">
+            Switch to Crawl with this URL &rarr;
+          </button>
+        </div>
+        <!-- Batch scrape controls (shown after map results) -->
+        <div id="map-batch-controls" class="hidden mt-3 bg-gray-50 border rounded-lg p-3 space-y-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-medium text-gray-600">Batch Scrape URLs:</span>
+            <input id="map-filter" type="text" placeholder="Filter URLs (e.g. /capabilities/devvit)"
+                   class="flex-1 min-w-48 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                   oninput="applyMapFilter()" />
+            <span id="map-filter-count" class="text-xs text-gray-400"></span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <input id="map-batch-limit" type="number" value="20" min="1" max="30"
+                   class="w-16 border rounded px-2 py-1 text-xs focus:outline-none text-center"
+                   title="Max URLs to scrape (max 30)" />
+            <label class="text-xs text-gray-500">max URLs (30 limit)</label>
+            <button onclick="runBatchScrape()"
+                    class="bg-purple-600 text-white px-3 py-1.5 rounded text-xs hover:bg-purple-700">
+              Batch Scrape Filtered
+            </button>
+            <button id="map-batch-ingest-btn" onclick="ingestBatch()" class="hidden text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100">
+              + Add all to RAG Index
+            </button>
+          </div>
+          <div id="map-batch-status" class="text-xs text-gray-500 hidden"></div>
+          <div id="map-batch-result" class="hidden space-y-1"></div>
+        </div>
+
+        <div class="bg-white border rounded-lg overflow-hidden mt-2">
+          <div id="map-links" class="max-h-72 overflow-y-auto divide-y text-xs"></div>
         </div>
       </div>
     </div>
 
     <!-- ── Extract mode ── -->
     <div id="scraper-panel-extract" class="scraper-panel hidden">
-      <p class="text-xs text-gray-400 mb-3">Use an LLM to extract structured information from one or more URLs. Provide a plain-English prompt describing what to extract.</p>
+      <p class="text-xs text-gray-400 mb-2">Use an LLM to extract structured information from one or more URLs. Provide a plain-English prompt describing what to extract.</p>
+      <div class="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">
+        <strong>Status: Degraded.</strong> Extract requires an <code>OPENAI_API_KEY</code> or
+        <code>OLLAMA_BASE_URL</code> configured in the Firecrawl container on svcnode-01.
+        Neither is currently set. Requests will fail with a Firecrawl error.
+        To fix: add <code>OPENAI_API_KEY</code> to <code>/opt/firecrawl/.env</code> on svcnode-01
+        and recreate the containers.
+      </div>
       <textarea id="extract-urls" rows="3" placeholder="https://example.com/product/123&#10;https://example.com/product/456"
                 class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 font-mono resize-y"></textarea>
       <textarea id="extract-prompt" rows="3" placeholder="Extract: product name, price, rating, key features, and availability status."
@@ -469,6 +550,44 @@ function clearChat() {
   document.getElementById('chat-thread').innerHTML = '';
 }
 
+// ── Quick test presets ──────────────────────────────────────────────────────
+function quickTest(mode, url) {
+  // Close the details dropdown
+  document.querySelectorAll('details').forEach(d => d.removeAttribute('open'));
+
+  // Switch to the correct mode tab
+  document.querySelectorAll('.scraper-mode-btn').forEach(b => {
+    b.classList.remove('active', 'bg-white', 'shadow-sm');
+    b.classList.add('text-gray-500');
+  });
+  const modeBtn = document.querySelector(`.scraper-mode-btn[data-mode="${mode}"]`);
+  if (modeBtn) {
+    modeBtn.classList.add('active', 'bg-white', 'shadow-sm');
+    modeBtn.classList.remove('text-gray-500');
+  }
+  document.querySelectorAll('.scraper-panel').forEach(p => p.classList.add('hidden'));
+  const panel = document.getElementById(`scraper-panel-${mode}`);
+  if (panel) panel.classList.remove('hidden');
+
+  // Pre-fill the URL field and set sensible defaults for the preset
+  if (mode === 'scrape') {
+    document.getElementById('scrape-url').value = url;
+  } else if (mode === 'crawl') {
+    document.getElementById('crawl-url').value   = url;
+    document.getElementById('crawl-depth').value = '3';
+    document.getElementById('crawl-limit').value = url.includes('/docs/capabilities') ? '30' : '50';
+  } else if (mode === 'map') {
+    document.getElementById('map-url').value   = url;
+    document.getElementById('map-limit').value = '200';
+  } else if (mode === 'extract') {
+    document.getElementById('extract-urls').value  = url;
+    document.getElementById('extract-prompt').value =
+      'Extract all configuration properties for Devvit web. For each property include: ' +
+      'name, type, default value, whether it is required, and a description of what it controls. ' +
+      'Also note any related hooks, callbacks, or lifecycle methods mentioned on the page.';
+  }
+}
+
 // ── Scraper: mode switcher ──────────────────────────────────────────────────
 document.querySelectorAll('.scraper-mode-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -653,19 +772,141 @@ async function runMap() {
 
     document.getElementById('map-summary-line').textContent =
       `${data.total} URL(s) discovered on ${url}`;
-    document.getElementById('map-links').innerHTML = (data.links || []).map(link => `
-      <div class="px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2">
-        <span class="text-gray-300">&#8594;</span>
-        <a href="${escHtml(link)}" target="_blank"
-           class="text-blue-500 hover:underline truncate">${escHtml(link)}</a>
-      </div>`).join('');
 
+    const emptyHint    = document.getElementById('map-empty-hint');
+    const switchBtn    = document.getElementById('map-switch-crawl');
+    const linksEl      = document.getElementById('map-links');
+    const batchControls = document.getElementById('map-batch-controls');
+    const fewResults   = data.total <= 1;
+
+    emptyHint.classList.toggle('hidden', !fewResults);
+    switchBtn.classList.toggle('hidden', fewResults || data.total < 5);
+    batchControls.classList.toggle('hidden', fewResults);
+
+    // Store all links for filter/batch
+    _allMapLinks = data.links || [];
+    document.getElementById('map-filter').value = '';
+    document.getElementById('map-batch-result').classList.add('hidden');
+    document.getElementById('map-batch-status').classList.add('hidden');
+    document.getElementById('map-batch-ingest-btn').classList.add('hidden');
+    applyMapFilter();
+
+    // Store the URL for switchMapToCrawl
+    linksEl.dataset.sourceUrl = url;
     result.classList.remove('hidden');
     status.classList.add('hidden');
   } catch (e) {
     status.className = 'text-sm text-red-600';
-    status.textContent = `Error: ${e.message}`;
+    const mapUrl = document.getElementById('map-url').value.trim();
+    const errMsg = e.message || '';
+    // Surface sitemap hint alongside error so user knows to use crawl instead
+    const sitemapHint = errMsg.match(/500|sitemap|search|supabase|serper/i)
+      ? `<br/><span class="text-xs text-amber-700">Tip: this site may not have a sitemap.xml. Use <button onclick="switchMapToCrawl()" class="underline font-medium">Crawl mode</button> to discover links instead.</span>`
+      : '';
+    status.innerHTML = `Error: ${escHtml(errMsg)}${sitemapHint}`;
   }
+}
+
+// ── Map: filter + batch scrape ───────────────────────────────────────────────
+
+let _allMapLinks  = [];
+let _batchCombined = '';
+let _batchFilename = '';
+
+function applyMapFilter() {
+  const filter  = (document.getElementById('map-filter').value || '').toLowerCase();
+  const linksEl = document.getElementById('map-links');
+  const countEl = document.getElementById('map-filter-count');
+  const visible = _allMapLinks.filter(l => !filter || l.toLowerCase().includes(filter));
+  linksEl.innerHTML = visible.map(link => `
+    <div class="px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2">
+      <span class="text-gray-300">&#8594;</span>
+      <a href="${escHtml(link)}" target="_blank"
+         class="text-blue-500 hover:underline truncate">${escHtml(link)}</a>
+    </div>`).join('');
+  const limit = parseInt(document.getElementById('map-batch-limit').value || 20);
+  countEl.textContent = `${visible.length} shown / ${_allMapLinks.length} total`;
+}
+
+async function runBatchScrape() {
+  const filter  = (document.getElementById('map-filter').value || '').toLowerCase();
+  const limit   = parseInt(document.getElementById('map-batch-limit').value || 20);
+  const urls    = _allMapLinks.filter(l => !filter || l.toLowerCase().includes(filter)).slice(0, limit);
+  const status  = document.getElementById('map-batch-status');
+  const result  = document.getElementById('map-batch-result');
+  const ingestBtn = document.getElementById('map-batch-ingest-btn');
+
+  if (!urls.length) { alert('No URLs match the current filter.'); return; }
+
+  _batchCombined = '';
+  _batchFilename = '';
+  status.className   = 'text-xs text-blue-600';
+  status.textContent = `Scraping ${urls.length} URL(s) one at a time... (this may take a while)`;
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+  ingestBtn.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/batch_scrape', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, max_urls: limit }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    _batchCombined = data.combined_markdown || '';
+    _batchFilename = 'devvit_docs_batch.md';
+
+    status.textContent = `Done: ${data.succeeded}/${data.total} scraped successfully` +
+      (data.failed ? ` (${data.failed} failed)` : '');
+    status.className = data.failed ? 'text-xs text-amber-600' : 'text-xs text-green-600';
+
+    result.innerHTML = (data.results || []).map(r => `
+      <div class="flex items-center gap-2 px-2 py-1 rounded ${r.ok ? 'bg-green-50' : 'bg-red-50'}">
+        <span class="${r.ok ? 'text-green-500' : 'text-red-400'}">${r.ok ? '&#10003;' : '&#10007;'}</span>
+        <span class="truncate text-gray-600 flex-1">${escHtml(r.title || r.url)}</span>
+        <span class="text-gray-400 flex-shrink-0">${r.ok ? r.chars.toLocaleString() + ' chars' : escHtml(r.error || 'failed')}</span>
+      </div>`).join('');
+    result.classList.remove('hidden');
+
+    if (_batchCombined) {
+      ingestBtn.textContent = '+ Add all to RAG Index';
+      ingestBtn.disabled = false;
+      ingestBtn.className = 'text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100';
+      ingestBtn.classList.remove('hidden');
+    }
+  } catch (e) {
+    status.className = 'text-xs text-red-600';
+    status.textContent = `Batch scrape error: ${e.message}`;
+  }
+}
+
+async function ingestBatch() {
+  if (!_batchCombined) return;
+  const btn = document.getElementById('map-batch-ingest-btn');
+  btn.textContent = 'Indexing...';
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/scraper/ingest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: _batchCombined, filename: _batchFilename }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    btn.textContent = `Indexed (${data.chunk_count} chunks)`;
+    btn.className = 'text-xs bg-gray-100 border text-gray-500 px-3 py-1 rounded cursor-default';
+  } catch (e) {
+    btn.textContent = `Failed: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+function switchMapToCrawl() {
+  const mapUrlEl  = document.getElementById('map-url');
+  const linksEl   = document.getElementById('map-links');
+  const sourceUrl = (mapUrlEl && mapUrlEl.value.trim()) ||
+                    (linksEl && linksEl.dataset.sourceUrl) || '';
+  quickTest('crawl', sourceUrl || '');
 }
 
 // ── Scraper: extract ────────────────────────────────────────────────────────
