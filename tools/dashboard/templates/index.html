@@ -159,9 +159,8 @@
         <div><span class="font-medium text-green-700">currentOpeningHours</span> — open now + hours</div>
         <div><span class="font-medium text-green-700">businessStatus</span> — OPERATIONAL / CLOSED</div>
         <div><span class="font-medium text-green-700">editorialSummary</span> — AI description</div>
-        <div class="col-span-2 mt-1 font-medium text-gray-500">Still requires gateway update:</div>
-        <div><span class="font-medium text-yellow-700">photos</span> — photo references (up to 10)</div>
-        <div><span class="font-medium text-yellow-700">regularOpeningHours</span> — full weekly schedule</div>
+        <div><span class="font-medium text-green-700">photos</span> — photo references (up to 10)</div>
+        <div><span class="font-medium text-green-700">regularOpeningHours</span> — full weekly schedule</div>
       </div>
     </details>
 
@@ -479,7 +478,9 @@ async function runPlaces() {
       const status   = p.businessStatus     || '';
       const price    = p.priceLevel         || '';
       const summary  = p.editorialSummary?.text || p.editorialSummary || '';
-      const hours    = p.currentOpeningHours || null;
+      const hours     = p.currentOpeningHours || null;
+      const photos    = p.photos || [];
+      const weekHours = p.regularOpeningHours?.weekdayDescriptions || [];
 
       const ratingHtml = rating != null
         ? `<span class="font-bold text-yellow-600">${rating}</span><span class="text-gray-400 text-xs"> / 5 &nbsp;(${rCount.toLocaleString()} reviews)</span>`
@@ -520,6 +521,25 @@ async function runPlaces() {
         website ? `<a href="${escHtml(website)}" target="_blank" class="text-blue-500 hover:underline truncate max-w-xs inline-block align-bottom">&#127760; ${escHtml(website.replace(/^https?:\/\//,'').split('/')[0])}</a>` : '',
       ].filter(Boolean).join('<span class="text-gray-300 mx-1">|</span>');
 
+      const photosHtml = photos.length
+        ? `<div class="flex gap-2 overflow-x-auto mt-3 pb-1">
+            ${photos.slice(0, 6).map(ph =>
+              `<img src="http://places.platform.ibbytech.com/v1/places/photo?name=${encodeURIComponent(ph.name)}&maxHeightPx=200&maxWidthPx=280"
+                    class="h-28 w-auto rounded object-cover flex-shrink-0 border border-gray-200" loading="lazy"
+                    onerror="this.style.display='none'" />`
+            ).join('')}
+          </div>`
+        : '';
+
+      const hoursHtml = weekHours.length
+        ? `<details class="mt-2">
+            <summary class="text-xs text-blue-500 cursor-pointer">Weekly hours</summary>
+            <div class="text-xs text-gray-600 mt-1 space-y-0.5 pl-2 border-l-2 border-blue-100">
+              ${weekHours.map(d => `<div>${escHtml(d)}</div>`).join('')}
+            </div>
+          </details>`
+        : '';
+
       return `
         <div class="bg-white border rounded-lg p-4 shadow-sm">
           <div class="flex items-start gap-3">
@@ -549,6 +569,10 @@ async function runPlaces() {
               ${typesHtml}
 
               ${contactHtml ? `<div class="flex flex-wrap items-center gap-1 mt-2 text-xs text-gray-600">${contactHtml}</div>` : ''}
+
+              ${hoursHtml}
+
+              ${photosHtml}
 
               <a href="${escHtml(mapsUrl)}" target="_blank"
                  class="text-xs text-blue-500 hover:underline mt-2 inline-block">View on Google Maps &rarr;</a>
