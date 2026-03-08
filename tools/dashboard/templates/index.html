@@ -89,30 +89,138 @@
 
   <!-- ── Tab: Scraper ── -->
   <div id="tab-scraper" class="tab-pane">
-    <h2 class="text-base font-semibold mb-4">Web Scraper</h2>
-    <div class="flex gap-2 mb-4">
-      <input id="scraper-url" type="url" placeholder="https://example.com/article"
-             class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-             onkeydown="if(event.key==='Enter') runScraper()" />
-      <button onclick="runScraper()"
-              class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Scrape</button>
+    <h2 class="text-base font-semibold mb-3">Web Scraper</h2>
+
+    <!-- Mode selector -->
+    <div class="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+      <button class="scraper-mode-btn active px-3 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm" data-mode="scrape">Scrape</button>
+      <button class="scraper-mode-btn px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700" data-mode="crawl">Crawl</button>
+      <button class="scraper-mode-btn px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700" data-mode="map">Map</button>
+      <button class="scraper-mode-btn px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700" data-mode="extract">Extract</button>
     </div>
-    <div id="scraper-status" class="text-sm text-gray-500 mb-3 hidden"></div>
-    <div id="scraper-result" class="hidden">
-      <div class="bg-white border rounded-lg p-4 mb-3">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-sm font-semibold text-gray-700">Summary</h3>
-          <button id="scraper-ingest-btn" onclick="ingestScraped()"
+
+    <!-- ── Scrape mode ── -->
+    <div id="scraper-panel-scrape" class="scraper-panel">
+      <p class="text-xs text-gray-400 mb-3">Fetch a single page and return it as markdown.</p>
+      <div class="flex gap-2 mb-2">
+        <input id="scrape-url" type="url" placeholder="https://example.com/article"
+               class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+               onkeydown="if(event.key==='Enter') runScrape()" />
+        <button onclick="runScrape()"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Scrape</button>
+      </div>
+      <details class="mb-3 border rounded bg-gray-50">
+        <summary class="text-xs font-medium text-gray-500 px-3 py-2 cursor-pointer">Advanced options</summary>
+        <div class="p-3 grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block text-gray-500 mb-1">Wait for JS (ms)</label>
+            <input id="scrape-wait" type="number" placeholder="e.g. 2000"
+                   class="w-full border rounded px-2 py-1 text-sm focus:outline-none" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-gray-500 mb-1">Include HTML tags (comma-separated, e.g. article,main)</label>
+            <input id="scrape-include-tags" type="text" placeholder="article, main, .content"
+                   class="w-full border rounded px-2 py-1 text-sm focus:outline-none" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-gray-500 mb-1">Exclude HTML tags (comma-separated, e.g. nav,footer,aside)</label>
+            <input id="scrape-exclude-tags" type="text" placeholder="nav, footer, aside, .ads"
+                   class="w-full border rounded px-2 py-1 text-sm focus:outline-none" />
+          </div>
+        </div>
+      </details>
+      <div id="scrape-status" class="text-sm text-gray-500 mb-3 hidden"></div>
+      <div id="scrape-result" class="hidden">
+        <div class="bg-white border rounded-lg p-4 mb-3">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-700">Summary</h3>
+            <button id="scraper-ingest-btn" onclick="ingestScraped()"
+                    class="text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100">
+              + Add to RAG Index
+            </button>
+          </div>
+          <div id="scrape-summary" class="text-sm text-gray-800 whitespace-pre-line"></div>
+        </div>
+        <details class="bg-gray-50 border rounded-lg p-3">
+          <summary class="text-xs font-medium text-gray-500 cursor-pointer">Raw scraped text</summary>
+          <pre id="scrape-raw" class="text-xs text-gray-600 mt-2 max-h-64 overflow-y-auto"></pre>
+        </details>
+      </div>
+    </div>
+
+    <!-- ── Crawl mode ── -->
+    <div id="scraper-panel-crawl" class="scraper-panel hidden">
+      <p class="text-xs text-gray-400 mb-3">Recursively crawl a site and collect multiple pages as markdown. Useful for documentation sites, wikis, or product pages.</p>
+      <div class="flex gap-2 mb-2 flex-wrap">
+        <input id="crawl-url" type="url" placeholder="https://docs.example.com"
+               class="flex-1 min-w-60 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+               onkeydown="if(event.key==='Enter') runCrawl()" />
+        <div class="flex items-center gap-1 border rounded px-3 py-2 bg-white">
+          <span class="text-xs text-gray-500 whitespace-nowrap">Depth</span>
+          <input id="crawl-depth" type="number" value="2" min="1" max="10"
+                 class="w-10 text-sm focus:outline-none text-center" title="Max link depth from start URL" />
+        </div>
+        <div class="flex items-center gap-1 border rounded px-3 py-2 bg-white">
+          <span class="text-xs text-gray-500 whitespace-nowrap">Max pages</span>
+          <input id="crawl-limit" type="number" value="10" min="1" max="100"
+                 class="w-12 text-sm focus:outline-none text-center" />
+        </div>
+        <button onclick="runCrawl()"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Crawl</button>
+      </div>
+      <div id="crawl-status" class="text-sm text-gray-500 mb-3 hidden"></div>
+      <div id="crawl-result" class="hidden space-y-2">
+        <div class="flex items-center justify-between">
+          <p id="crawl-summary-line" class="text-sm text-gray-600"></p>
+          <button id="crawl-ingest-btn" onclick="ingestCrawl()"
                   class="text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100">
-            + Add to RAG Index
+            + Add all to RAG Index
           </button>
         </div>
-        <div id="scraper-summary" class="text-sm text-gray-800 whitespace-pre-line"></div>
+        <div id="crawl-pages" class="space-y-2"></div>
       </div>
-      <details class="bg-gray-50 border rounded-lg p-3">
-        <summary class="text-xs font-medium text-gray-500 cursor-pointer">Raw scraped text</summary>
-        <pre id="scraper-raw" class="text-xs text-gray-600 mt-2 max-h-64 overflow-y-auto"></pre>
-      </details>
+    </div>
+
+    <!-- ── Map mode ── -->
+    <div id="scraper-panel-map" class="scraper-panel hidden">
+      <p class="text-xs text-gray-400 mb-3">Discover all URLs on a site without downloading content. Useful for understanding site structure before crawling.</p>
+      <div class="flex gap-2 mb-2 flex-wrap">
+        <input id="map-url" type="url" placeholder="https://example.com"
+               class="flex-1 min-w-60 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+               onkeydown="if(event.key==='Enter') runMap()" />
+        <div class="flex items-center gap-1 border rounded px-3 py-2 bg-white">
+          <span class="text-xs text-gray-500 whitespace-nowrap">Max URLs</span>
+          <input id="map-limit" type="number" value="50" min="1" max="500"
+                 class="w-14 text-sm focus:outline-none text-center" />
+        </div>
+        <button onclick="runMap()"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Map</button>
+      </div>
+      <div id="map-status" class="text-sm text-gray-500 mb-3 hidden"></div>
+      <div id="map-result" class="hidden">
+        <p id="map-summary-line" class="text-sm text-gray-600 mb-2"></p>
+        <div class="bg-white border rounded-lg overflow-hidden">
+          <div id="map-links" class="max-h-96 overflow-y-auto divide-y text-xs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Extract mode ── -->
+    <div id="scraper-panel-extract" class="scraper-panel hidden">
+      <p class="text-xs text-gray-400 mb-3">Use an LLM to extract structured information from one or more URLs. Provide a plain-English prompt describing what to extract.</p>
+      <textarea id="extract-urls" rows="3" placeholder="https://example.com/product/123&#10;https://example.com/product/456"
+                class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 font-mono resize-y"></textarea>
+      <textarea id="extract-prompt" rows="3" placeholder="Extract: product name, price, rating, key features, and availability status."
+                class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 resize-y"></textarea>
+      <button onclick="runExtract()"
+              class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Extract</button>
+      <div id="extract-status" class="text-sm text-gray-500 mt-3 hidden"></div>
+      <div id="extract-result" class="hidden mt-3">
+        <div class="bg-white border rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-700 mb-2">Extracted Data</h3>
+          <pre id="extract-data" class="text-xs text-gray-700 overflow-x-auto max-h-96 overflow-y-auto"></pre>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -361,27 +469,49 @@ function clearChat() {
   document.getElementById('chat-thread').innerHTML = '';
 }
 
-// ── Scraper ────────────────────────────────────────────────────────────────
-let _lastScrapedContent = '';
+// ── Scraper: mode switcher ──────────────────────────────────────────────────
+document.querySelectorAll('.scraper-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.scraper-mode-btn').forEach(b => {
+      b.classList.remove('active', 'bg-white', 'shadow-sm');
+      b.classList.add('text-gray-500');
+    });
+    btn.classList.add('active', 'bg-white', 'shadow-sm');
+    btn.classList.remove('text-gray-500');
+    document.querySelectorAll('.scraper-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('scraper-panel-' + btn.dataset.mode).classList.remove('hidden');
+  });
+});
+
+// ── Scraper: single-page scrape ─────────────────────────────────────────────
+let _lastScrapedContent  = '';
 let _lastScrapedFilename = '';
 
-async function runScraper() {
-  const url    = document.getElementById('scraper-url').value.trim();
-  const status = document.getElementById('scraper-status');
-  const result = document.getElementById('scraper-result');
+async function runScrape() {
+  const url         = document.getElementById('scrape-url').value.trim();
+  const waitForMs   = document.getElementById('scrape-wait').value.trim();
+  const includeTags = document.getElementById('scrape-include-tags').value.trim();
+  const excludeTags = document.getElementById('scrape-exclude-tags').value.trim();
+  const status      = document.getElementById('scrape-status');
+  const result      = document.getElementById('scrape-result');
   if (!url) return;
 
   _lastScrapedContent  = '';
   _lastScrapedFilename = '';
   status.className = 'text-sm text-blue-600';
   status.textContent = 'Scraping... (may take 10-30s)';
+  status.classList.remove('hidden');
   result.classList.add('hidden');
+
+  const payload = { url };
+  if (waitForMs)   payload.wait_for_ms   = parseInt(waitForMs);
+  if (includeTags) payload.include_tags  = includeTags;
+  if (excludeTags) payload.exclude_tags  = excludeTags;
 
   try {
     const res  = await fetch('/api/scraper/scrape', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail);
@@ -389,13 +519,13 @@ async function runScraper() {
     _lastScrapedContent  = data.raw;
     _lastScrapedFilename = url.replace(/^https?:\/\//, '').replace(/[^a-z0-9]/gi, '_').slice(0, 60) + '.md';
 
-    document.getElementById('scraper-summary').textContent = data.summary;
-    document.getElementById('scraper-raw').textContent     = data.raw;
+    document.getElementById('scrape-summary').textContent = data.summary;
+    document.getElementById('scrape-raw').textContent     = data.raw;
     document.getElementById('scraper-ingest-btn').textContent = '+ Add to RAG Index';
     document.getElementById('scraper-ingest-btn').disabled = false;
+    document.getElementById('scraper-ingest-btn').className = 'text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100';
     result.classList.remove('hidden');
-    status.className = 'text-sm text-gray-500';
-    status.textContent = '';
+    status.classList.add('hidden');
   } catch (e) {
     status.className = 'text-sm text-red-600';
     status.textContent = `Error: ${e.message}`;
@@ -409,8 +539,7 @@ async function ingestScraped() {
   btn.disabled = true;
   try {
     const res  = await fetch('/api/scraper/ingest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: _lastScrapedContent, filename: _lastScrapedFilename }),
     });
     const data = await res.json();
@@ -420,6 +549,157 @@ async function ingestScraped() {
   } catch (e) {
     btn.textContent = `Failed: ${e.message}`;
     btn.disabled = false;
+  }
+}
+
+// ── Scraper: crawl ──────────────────────────────────────────────────────────
+let _crawlCombined  = '';
+let _crawlFilename  = '';
+
+async function runCrawl() {
+  const url    = document.getElementById('crawl-url').value.trim();
+  const depth  = document.getElementById('crawl-depth').value || 2;
+  const limit  = document.getElementById('crawl-limit').value || 10;
+  const status = document.getElementById('crawl-status');
+  const result = document.getElementById('crawl-result');
+  if (!url) return;
+
+  _crawlCombined = '';
+  _crawlFilename = '';
+  status.className = 'text-sm text-blue-600';
+  status.textContent = `Crawling up to ${limit} pages (depth ${depth})... this may take a minute.`;
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/crawl', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, max_depth: parseInt(depth), limit: parseInt(limit) }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    _crawlCombined = data.combined_markdown || '';
+    _crawlFilename = url.replace(/^https?:\/\//, '').replace(/[^a-z0-9]/gi, '_').slice(0, 50) + '_crawl.md';
+
+    document.getElementById('crawl-summary-line').textContent =
+      `${data.total} page(s) crawled from ${url}`;
+
+    const ingestBtn = document.getElementById('crawl-ingest-btn');
+    ingestBtn.textContent = '+ Add all to RAG Index';
+    ingestBtn.disabled = false;
+    ingestBtn.className = 'text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100';
+
+    document.getElementById('crawl-pages').innerHTML = (data.pages || []).map((p, i) => `
+      <details class="bg-white border rounded-lg">
+        <summary class="px-4 py-2 cursor-pointer text-sm flex justify-between items-center">
+          <span class="font-medium truncate max-w-lg">${escHtml(p.title || p.url)}</span>
+          <span class="text-xs text-gray-400 ml-2 flex-shrink-0">${p.chars.toLocaleString()} chars</span>
+        </summary>
+        <div class="px-4 pb-3">
+          <p class="text-xs text-gray-400 mb-2">${escHtml(p.url)}</p>
+          <pre class="text-xs text-gray-600 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded">${escHtml((p.markdown || '').slice(0, 1000))}${(p.markdown||'').length > 1000 ? '\n…' : ''}</pre>
+        </div>
+      </details>`).join('');
+
+    result.classList.remove('hidden');
+    status.classList.add('hidden');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+async function ingestCrawl() {
+  if (!_crawlCombined) return;
+  const btn = document.getElementById('crawl-ingest-btn');
+  btn.textContent = 'Indexing...';
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/scraper/ingest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: _crawlCombined, filename: _crawlFilename }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    btn.textContent = `Indexed (${data.chunk_count} chunks)`;
+    btn.className = 'text-xs bg-gray-100 border text-gray-500 px-3 py-1 rounded cursor-default';
+  } catch (e) {
+    btn.textContent = `Failed: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+// ── Scraper: map ────────────────────────────────────────────────────────────
+async function runMap() {
+  const url    = document.getElementById('map-url').value.trim();
+  const limit  = document.getElementById('map-limit').value || 50;
+  const status = document.getElementById('map-status');
+  const result = document.getElementById('map-result');
+  if (!url) return;
+
+  status.className = 'text-sm text-blue-600';
+  status.textContent = 'Mapping site URLs...';
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/map', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, limit: parseInt(limit) }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    document.getElementById('map-summary-line').textContent =
+      `${data.total} URL(s) discovered on ${url}`;
+    document.getElementById('map-links').innerHTML = (data.links || []).map(link => `
+      <div class="px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2">
+        <span class="text-gray-300">&#8594;</span>
+        <a href="${escHtml(link)}" target="_blank"
+           class="text-blue-500 hover:underline truncate">${escHtml(link)}</a>
+      </div>`).join('');
+
+    result.classList.remove('hidden');
+    status.classList.add('hidden');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+// ── Scraper: extract ────────────────────────────────────────────────────────
+async function runExtract() {
+  const urlsRaw = document.getElementById('extract-urls').value.trim();
+  const prompt  = document.getElementById('extract-prompt').value.trim();
+  const status  = document.getElementById('extract-status');
+  const result  = document.getElementById('extract-result');
+
+  if (!urlsRaw) { alert('Enter at least one URL'); return; }
+  if (!prompt)  { alert('Enter an extraction prompt'); return; }
+
+  const urls = urlsRaw.split('\n').map(u => u.trim()).filter(Boolean);
+
+  status.className = 'text-sm text-blue-600';
+  status.textContent = `Extracting from ${urls.length} URL(s)... (may take 30-60s per URL)`;
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/extract', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, prompt }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    document.getElementById('extract-data').textContent =
+      JSON.stringify(data.data, null, 2);
+    result.classList.remove('hidden');
+    status.classList.add('hidden');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
   }
 }
 

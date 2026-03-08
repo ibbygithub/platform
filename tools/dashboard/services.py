@@ -50,14 +50,55 @@ def llm_embed(texts: list[str]) -> list[list[float]]:
 
 # ── Scraper ───────────────────────────────────────────────────────────────────
 
-def scrape_url(url: str) -> dict:
-    """Scrape a URL. Returns the data dict from the scraper response."""
+def scrape_url(url: str, wait_for_ms: int | None = None,
+               include_tags: list[str] | None = None,
+               exclude_tags: list[str] | None = None) -> dict:
+    """Scrape a single URL. Returns the data dict from the scraper response."""
+    payload: dict[str, Any] = {"url": url, "formats": ["markdown"]}
+    if wait_for_ms:
+        payload["wait_for_ms"] = wait_for_ms
+    if include_tags:
+        payload["include_tags"] = include_tags
+    if exclude_tags:
+        payload["exclude_tags"] = exclude_tags
     resp = requests.post(f"{SCRAPER_URL}/v1/scrape",
-                         headers=HEADERS,
-                         json={"url": url, "formats": ["markdown"]},
-                         timeout=90)
+                         headers=HEADERS, json=payload, timeout=90)
     resp.raise_for_status()
     return resp.json().get("data", {})
+
+
+def crawl_url(url: str, max_depth: int = 2, limit: int = 10) -> dict:
+    """Crawl a site up to limit pages. Returns {ok, session_id, total, data: [pages]}."""
+    resp = requests.post(f"{SCRAPER_URL}/v1/crawl",
+                         headers=HEADERS,
+                         json={"url": url, "max_depth": max_depth, "limit": limit},
+                         timeout=360)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def map_url(url: str, limit: int = 50) -> dict:
+    """Discover all URLs on a site. Returns {ok, url, links: [str]}."""
+    resp = requests.post(f"{SCRAPER_URL}/v1/map",
+                         headers=HEADERS,
+                         json={"url": url, "limit": limit},
+                         timeout=60)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def extract_url(urls: list[str], prompt: str | None = None,
+                schema_def: dict | None = None) -> dict:
+    """Extract structured data from URLs via LLM. Returns {ok, urls, data}."""
+    payload: dict[str, Any] = {"urls": urls}
+    if prompt:
+        payload["prompt"] = prompt
+    if schema_def:
+        payload["schema_def"] = schema_def
+    resp = requests.post(f"{SCRAPER_URL}/v1/extract",
+                         headers=HEADERS, json=payload, timeout=180)
+    resp.raise_for_status()
+    return resp.json()
 
 
 # ── Places ────────────────────────────────────────────────────────────────────

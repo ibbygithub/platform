@@ -103,13 +103,22 @@ async def api_rag_query(request: Request):
 
 @app.post("/api/scraper/scrape")
 async def api_scrape(request: Request):
-    body = await request.json()
-    url  = (body.get("url") or "").strip()
+    body        = await request.json()
+    url         = (body.get("url") or "").strip()
+    wait_for_ms = body.get("wait_for_ms")
+    include_tags = [t.strip() for t in (body.get("include_tags") or "").split(",") if t.strip()] or None
+    exclude_tags = [t.strip() for t in (body.get("exclude_tags") or "").split(",") if t.strip()] or None
+
     if not url:
         raise HTTPException(status_code=400, detail="Missing: url")
 
     try:
-        scraped = services.scrape_url(url)
+        scraped = services.scrape_url(
+            url,
+            wait_for_ms=int(wait_for_ms) if wait_for_ms else None,
+            include_tags=include_tags,
+            exclude_tags=exclude_tags,
+        )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Scraper error: {e}")
 
@@ -152,6 +161,99 @@ async def api_scraper_ingest(request: Request):
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
 
     return result
+
+
+# ── Scraper: crawl ────────────────────────────────────────────────────────────
+
+@app.post("/api/scraper/crawl")
+async def api_scraper_crawl(request: Request):
+    """Crawl a site, returning each page as markdown. Polls until Firecrawl job completes."""
+    body      = await request.json()
+    url       = (body.get("url") or "").strip()
+    max_depth = int(body.get("max_depth") or 2)
+    limit     = int(body.get("limit") or 10)
+
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing: url")
+    if not 1 <= max_depth <= 10:
+        raise HTTPException(status_code=400, detail="max_depth must be 1–10")
+    if not 1 <= limit <= 100:
+        raise HTTPException(status_code=400, detail="limit must be 1–100")
+
+    try:
+        result = services.crawl_url(url, max_depth=max_depth, limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Crawl error: {e}")
+
+    pages = result.get("data", [])
+    # Build a combined markdown document for RAG ingestion
+    combined = "\n\n---\n\n".join(
+        f"# {(p.get('metadata') or {}).get('title', p.get('url', ''))}\n\n{p.get('markdown', '')}"
+        for p in pages if p.get("markdown")
+    )
+    return {
+        "ok":         result.get("ok", True),
+        "url":        url,
+        "session_id": result.get("session_id"),
+        "total":      result.get("total", len(pages)),
+        "pages":      [
+            {
+                "url":      (p.get("metadata") or {}).get("sourceURL") or p.get("url", ""),
+                "title":    (p.get("metadata") or {}).get("title", ""),
+                "markdown": p.get("markdown", ""),
+                "chars":    len(p.get("markdown", "")),
+            }
+            for p in pages
+        ],
+        "combined_markdown": combined,
+    }
+
+
+# ── Scraper: map ──────────────────────────────────────────────────────────────
+
+@app.post("/api/scraper/map")
+async def api_scraper_map(request: Request):
+    """Discover all URLs on a site without scraping content."""
+    body  = await request.json()
+    url   = (body.get("url") or "").strip()
+    limit = int(body.get("limit") or 50)
+
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing: url")
+
+    try:
+        result = services.map_url(url, limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Map error: {e}")
+
+    links = result.get("links", [])
+    return {"ok": result.get("ok", True), "url": url, "links": links, "total": len(links)}
+
+
+# ── Scraper: extract ──────────────────────────────────────────────────────────
+
+@app.post("/api/scraper/extract")
+async def api_scraper_extract(request: Request):
+    """Extract structured data from one or more URLs using an LLM prompt."""
+    body   = await request.json()
+    urls   = body.get("urls") or []
+    prompt = (body.get("prompt") or "").strip()
+
+    # Accept a single url string as a convenience
+    if isinstance(urls, str):
+        urls = [u.strip() for u in urls.split("\n") if u.strip()]
+
+    if not urls:
+        raise HTTPException(status_code=400, detail="Missing: urls")
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Missing: prompt")
+
+    try:
+        result = services.extract_url(urls, prompt=prompt)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Extract error: {e}")
+
+    return {"ok": result.get("ok", True), "urls": urls, "data": result.get("data")}
 
 
 # ── Places ────────────────────────────────────────────────────────────────────
