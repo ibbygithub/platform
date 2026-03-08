@@ -74,6 +74,7 @@
       "Bash(ssh -i ~/.ssh/devops-agent_ed25519_clean devops-agent@192.168.71.222 git show*)",
 
       "Bash(git status*)",
+      "Bash(git status && echo*)",
       "Bash(git log *)",
       "Bash(git log --oneline*)",
       "Bash(git branch*)",

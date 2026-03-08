@@ -87,7 +87,9 @@ Evaluate the output against these criteria:
 
 ### Step 3 — Derive Last Work Context
 
-Read `outputs/validation/` and identify the three most recent evidence files.
+Use the `Glob` tool to list `outputs/validation/*.md`, then use the `Read` tool
+to read the three most recent evidence files. Do NOT use Bash (`ls`, `head`, `tail`)
+for this step — Glob and Read require no permission prompts.
 Extract: task name, completion date, outcome (completed / abandoned / blocked).
 This replaces any need for a manually maintained status file.
 
