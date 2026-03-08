@@ -63,7 +63,13 @@ def scrape_url(url: str, wait_for_ms: int | None = None,
         payload["exclude_tags"] = exclude_tags
     resp = requests.post(f"{SCRAPER_URL}/v1/scrape",
                          headers=HEADERS, json=payload, timeout=90)
-    resp.raise_for_status()
+    if not resp.ok:
+        try:
+            body = resp.json()
+            detail = body.get("detail") or body.get("error") or str(body)
+        except Exception:
+            detail = resp.text[:500] or f"HTTP {resp.status_code}"
+        raise RuntimeError(f"Scraper returned {resp.status_code}: {detail}")
     return resp.json().get("data", {})
 
 
@@ -73,7 +79,13 @@ def crawl_url(url: str, max_depth: int = 2, limit: int = 10) -> dict:
                          headers=HEADERS,
                          json={"url": url, "max_depth": max_depth, "limit": limit},
                          timeout=360)
-    resp.raise_for_status()
+    if not resp.ok:
+        try:
+            body = resp.json()
+            detail = body.get("detail") or body.get("error") or str(body)
+        except Exception:
+            detail = resp.text[:500] or f"HTTP {resp.status_code}"
+        raise RuntimeError(f"Scraper returned {resp.status_code}: {detail}")
     return resp.json()
 
 
@@ -83,7 +95,14 @@ def map_url(url: str, limit: int = 50) -> dict:
                          headers=HEADERS,
                          json={"url": url, "limit": limit},
                          timeout=60)
-    resp.raise_for_status()
+    if not resp.ok:
+        # Capture the response body so the UI gets a meaningful error
+        try:
+            body = resp.json()
+            detail = body.get("detail") or body.get("error") or str(body)
+        except Exception:
+            detail = resp.text[:500] or f"HTTP {resp.status_code}"
+        raise RuntimeError(f"Scraper returned {resp.status_code}: {detail}")
     return resp.json()
 
 
