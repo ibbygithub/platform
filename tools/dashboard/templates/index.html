@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IbbyTech Platform Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tab-btn.active { @apply border-b-2 border-blue-500 text-blue-600; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .source-chunk { border-left: 3px solid #3b82f6; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+<!-- Header -->
+<header class="bg-white border-b px-6 py-3 flex items-center gap-3 shadow-sm">
+  <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+  <h1 class="font-semibold text-lg">IbbyTech Platform Dashboard</h1>
+  <span class="ml-auto text-xs text-gray-400" id="clock"></span>
+</header>
+
+<!-- Tabs -->
+<nav class="bg-white border-b px-6 flex gap-6 text-sm font-medium text-gray-500">
+  <button class="tab-btn py-3 active" data-tab="dashboard">Dashboard</button>
+  <button class="tab-btn py-3" data-tab="documents">Documents</button>
+  <button class="tab-btn py-3" data-tab="rag">RAG Chat</button>
+  <button class="tab-btn py-3" data-tab="scraper">Scraper</button>
+  <button class="tab-btn py-3" data-tab="places">Places</button>
+</nav>
+
+<main class="max-w-5xl mx-auto p-6">
+
+  <!-- ── Tab: Dashboard ── -->
+  <div id="tab-dashboard" class="tab-pane active">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-semibold">Service Health</h2>
+      <button onclick="loadHealth()" class="text-xs bg-blue-50 border border-blue-200 text-blue-600 px-3 py-1 rounded hover:bg-blue-100">Refresh</button>
+    </div>
+    <div id="health-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="text-gray-400 text-sm col-span-3">Loading...</div>
+    </div>
+    <p class="text-xs text-gray-400 mt-4">Auto-refreshes every 30 seconds.</p>
+  </div>
+
+  <!-- ── Tab: Documents ── -->
+  <div id="tab-documents" class="tab-pane">
+    <h2 class="text-base font-semibold mb-4">Document Index</h2>
+
+    <!-- Upload zone -->
+    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-6 bg-white"
+         id="drop-zone">
+      <p class="text-gray-500 mb-3">Drop a file here or click to upload</p>
+      <p class="text-xs text-gray-400 mb-4">PDF, Word (.docx), TXT, Markdown</p>
+      <input id="file-input" type="file" accept=".pdf,.docx,.txt,.md" class="hidden" onchange="uploadFile(this)" />
+      <button onclick="document.getElementById('file-input').click()"
+              class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
+        Choose file
+      </button>
+    </div>
+    <div id="upload-status" class="text-sm mb-4 hidden"></div>
+
+    <!-- Document list -->
+    <div id="doc-list">
+      <div class="text-gray-400 text-sm">Loading...</div>
+    </div>
+  </div>
+
+  <!-- ── Tab: RAG Chat ── -->
+  <div id="tab-rag" class="tab-pane">
+    <h2 class="text-base font-semibold mb-1">RAG Chat</h2>
+    <p class="text-xs text-gray-400 mb-4">Answers are grounded in your indexed documents.</p>
+
+    <!-- Conversation thread -->
+    <div id="chat-thread" class="space-y-4 mb-4 max-h-[60vh] overflow-y-auto pr-1"></div>
+
+    <!-- Input -->
+    <div class="flex gap-2">
+      <input id="rag-input" type="text" placeholder="Ask a question about your documents..."
+             class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+             onkeydown="if(event.key==='Enter') sendRagQuery()" />
+      <button onclick="sendRagQuery()"
+              class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Ask</button>
+    </div>
+    <button onclick="clearChat()" class="text-xs text-gray-400 mt-2 hover:underline">Clear conversation</button>
+  </div>
+
+  <!-- ── Tab: Scraper ── -->
+  <div id="tab-scraper" class="tab-pane">
+    <h2 class="text-base font-semibold mb-4">Web Scraper</h2>
+    <div class="flex gap-2 mb-4">
+      <input id="scraper-url" type="url" placeholder="https://example.com/article"
+             class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+             onkeydown="if(event.key==='Enter') runScraper()" />
+      <button onclick="runScraper()"
+              class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Scrape</button>
+    </div>
+    <div id="scraper-result" class="hidden">
+      <div class="bg-white border rounded-lg p-4 mb-3">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">Summary</h3>
+        <div id="scraper-summary" class="text-sm text-gray-800 whitespace-pre-line"></div>
+      </div>
+      <details class="bg-gray-50 border rounded-lg p-3">
+        <summary class="text-xs font-medium text-gray-500 cursor-pointer">Raw scraped text</summary>
+        <pre id="scraper-raw" class="text-xs text-gray-600 mt-2 max-h-64 overflow-y-auto"></pre>
+      </details>
+    </div>
+    <div id="scraper-status" class="text-sm text-gray-500 hidden"></div>
+  </div>
+
+  <!-- ── Tab: Places ── -->
+  <div id="tab-places" class="tab-pane">
+    <h2 class="text-base font-semibold mb-4">Google Places Search</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+      <input id="places-query" type="text" placeholder="e.g. best ramen"
+             class="col-span-1 sm:col-span-3 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+             onkeydown="if(event.key==='Enter') runPlaces()" />
+      <input id="places-lat" type="number" step="any" placeholder="Latitude  e.g. 35.6762"
+             class="border rounded px-3 py-2 text-sm focus:outline-none" />
+      <input id="places-lng" type="number" step="any" placeholder="Longitude  e.g. 139.6503"
+             class="border rounded px-3 py-2 text-sm focus:outline-none" />
+      <input id="places-radius" type="number" value="5000" placeholder="Radius (m)"
+             class="border rounded px-3 py-2 text-sm focus:outline-none" />
+    </div>
+    <button onclick="runPlaces()"
+            class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 mb-4">Search</button>
+    <div id="places-status" class="text-sm text-gray-500 mb-2 hidden"></div>
+    <div id="places-results" class="space-y-2"></div>
+  </div>
+
+</main>
+
+<script>
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'border-b-2', 'border-blue-500', 'text-blue-600'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active', 'border-b-2', 'border-blue-500', 'text-blue-600');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'documents') loadDocs();
+  });
+});
+
+// ── Health ─────────────────────────────────────────────────────────────────
+async function loadHealth() {
+  const grid = document.getElementById('health-grid');
+  grid.innerHTML = '<div class="text-gray-400 text-sm col-span-3">Checking...</div>';
+  try {
+    const res = await fetch('/api/health');
+    const data = await res.json();
+    grid.innerHTML = data.map(s => {
+      const ok = s.ok === true;
+      const unknown = s.ok === null;
+      const dot = unknown ? 'bg-gray-300' : ok ? 'bg-green-400' : 'bg-red-400';
+      const label = unknown ? 'Unknown' : ok ? 'OK' : 'Error';
+      const latency = s.latency_ms != null ? `${s.latency_ms}ms` : '—';
+      const err = s.detail && s.detail.error ? `<p class="text-xs text-red-500 mt-1">${s.detail.error}</p>` : '';
+      return `
+        <div class="bg-white border rounded-lg p-4 shadow-sm">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2.5 h-2.5 rounded-full ${dot}"></span>
+            <span class="font-medium text-sm">${s.service}</span>
+            <span class="ml-auto text-xs text-gray-400">${label}</span>
+          </div>
+          <p class="text-xs text-gray-400">Latency: ${latency}</p>
+          ${err}
+        </div>`;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = `<div class="text-red-500 text-sm col-span-3">Health check failed: ${e.message}</div>`;
+  }
+}
+loadHealth();
+setInterval(loadHealth, 30000);
+
+// ── Documents ──────────────────────────────────────────────────────────────
+async function loadDocs() {
+  const el = document.getElementById('doc-list');
+  el.innerHTML = '<div class="text-gray-400 text-sm">Loading...</div>';
+  const res  = await fetch('/api/documents');
+  const docs = await res.json();
+  if (!docs.length) {
+    el.innerHTML = '<p class="text-gray-400 text-sm">No documents indexed yet.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="w-full text-sm border-collapse">
+      <thead><tr class="text-left text-xs text-gray-500 border-b">
+        <th class="pb-2 pr-4">Filename</th>
+        <th class="pb-2 pr-4">Chunks</th>
+        <th class="pb-2 pr-4">Uploaded</th>
+        <th class="pb-2"></th>
+      </tr></thead>
+      <tbody>
+        ${docs.map(d => `
+          <tr class="border-b last:border-0 hover:bg-gray-50">
+            <td class="py-2 pr-4 font-medium">${d.filename}</td>
+            <td class="py-2 pr-4 text-gray-500">${d.chunk_count}</td>
+            <td class="py-2 pr-4 text-gray-400 text-xs">${d.uploaded_at.slice(0,19).replace('T',' ')}</td>
+            <td class="py-2">
+              <button onclick="deleteDoc('${d.doc_id}','${d.filename}')"
+                      class="text-xs text-red-400 hover:text-red-600">Delete</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function uploadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('upload-status');
+  status.className = 'text-sm mb-4 text-blue-600';
+  status.textContent = `Uploading and indexing ${file.name}...`;
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res  = await fetch('/api/documents/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) {
+      status.className = 'text-sm mb-4 text-red-600';
+      status.textContent = `Error: ${data.detail}`;
+    } else {
+      status.className = 'text-sm mb-4 text-green-600';
+      status.textContent = `Indexed ${data.filename} — ${data.chunk_count} chunks created.`;
+      loadDocs();
+    }
+  } catch (e) {
+    status.className = 'text-sm mb-4 text-red-600';
+    status.textContent = `Upload failed: ${e.message}`;
+  }
+  input.value = '';
+}
+
+async function deleteDoc(docId, filename) {
+  if (!confirm(`Delete "${filename}" from the index?`)) return;
+  await fetch(`/api/documents/${docId}`, { method: 'DELETE' });
+  loadDocs();
+}
+
+// Drag and drop
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-blue-400','bg-blue-50'); });
+dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('border-blue-400','bg-blue-50'); });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('border-blue-400','bg-blue-50');
+  const fi = document.getElementById('file-input');
+  fi.files = e.dataTransfer.files;
+  uploadFile(fi);
+});
+
+// ── RAG Chat ───────────────────────────────────────────────────────────────
+async function sendRagQuery() {
+  const input    = document.getElementById('rag-input');
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+
+  const thread = document.getElementById('chat-thread');
+
+  // User bubble
+  thread.insertAdjacentHTML('beforeend', `
+    <div class="flex justify-end">
+      <div class="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-xl text-sm">${escHtml(question)}</div>
+    </div>`);
+
+  // Thinking placeholder
+  const thinkId = 'think-' + Date.now();
+  thread.insertAdjacentHTML('beforeend', `
+    <div id="${thinkId}" class="flex justify-start">
+      <div class="bg-white border rounded-lg px-4 py-2 text-sm text-gray-400">Thinking...</div>
+    </div>`);
+  thread.scrollTop = thread.scrollHeight;
+
+  try {
+    const res  = await fetch('/api/rag/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    const sources = (data.sources || []).map((s, i) => `
+      <div class="source-chunk bg-gray-50 rounded p-3 text-xs mt-2">
+        <p class="font-medium text-gray-600">${i+1}. ${escHtml(s.filename)} — chunk ${s.chunk_index+1}
+          <span class="text-gray-400">(score: ${s.score})</span></p>
+        <p class="text-gray-500 mt-1 line-clamp-3">${escHtml(s.chunk_text.slice(0,300))}${s.chunk_text.length>300?'…':''}</p>
+      </div>`).join('');
+
+    const sourcesBlock = data.sources && data.sources.length
+      ? `<details class="mt-2"><summary class="text-xs text-blue-500 cursor-pointer">Source chunks (${data.sources.length})</summary>${sources}</details>`
+      : '<p class="text-xs text-gray-400 mt-1">No grounding sources.</p>';
+
+    document.getElementById(thinkId).outerHTML = `
+      <div class="flex justify-start">
+        <div class="bg-white border rounded-lg px-4 py-3 max-w-xl text-sm shadow-sm">
+          <p class="whitespace-pre-line">${escHtml(data.answer)}</p>
+          ${sourcesBlock}
+        </div>
+      </div>`;
+  } catch (e) {
+    document.getElementById(thinkId).outerHTML = `
+      <div class="flex justify-start">
+        <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-600">Error: ${escHtml(e.message)}</div>
+      </div>`;
+  }
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function clearChat() {
+  document.getElementById('chat-thread').innerHTML = '';
+}
+
+// ── Scraper ────────────────────────────────────────────────────────────────
+async function runScraper() {
+  const url    = document.getElementById('scraper-url').value.trim();
+  const status = document.getElementById('scraper-status');
+  const result = document.getElementById('scraper-result');
+  if (!url) return;
+
+  status.className = 'text-sm text-blue-600';
+  status.textContent = 'Scraping... (may take 10-30s)';
+  result.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    document.getElementById('scraper-summary').textContent = data.summary;
+    document.getElementById('scraper-raw').textContent     = data.raw;
+    result.classList.remove('hidden');
+    status.textContent = '';
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+// ── Places ─────────────────────────────────────────────────────────────────
+async function runPlaces() {
+  const query   = document.getElementById('places-query').value.trim();
+  const lat     = document.getElementById('places-lat').value;
+  const lng     = document.getElementById('places-lng').value;
+  const radius  = document.getElementById('places-radius').value || 5000;
+  const status  = document.getElementById('places-status');
+  const results = document.getElementById('places-results');
+
+  if (!query)      { alert('Enter a search query'); return; }
+  if (!lat || !lng){ alert('Latitude and longitude are required'); return; }
+
+  status.className = 'text-sm text-blue-600';
+  status.textContent = 'Searching...';
+  results.innerHTML  = '';
+
+  try {
+    const res  = await fetch('/api/places/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, lat: parseFloat(lat), lng: parseFloat(lng),
+                             radius_m: parseInt(radius), max_results: 10 }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    const places = data.places || [];
+    status.textContent = `${places.length} result(s)`;
+    status.className   = 'text-sm text-gray-500';
+
+    if (!places.length) {
+      results.innerHTML = '<p class="text-gray-400 text-sm">No results returned.</p>';
+      return;
+    }
+
+    results.innerHTML = places.map(p => {
+      const name    = p.displayName?.text || p.displayName || 'Unknown';
+      const address = p.formattedAddress || '';
+      const rating  = p.rating ? `${p.rating} (${p.userRatingCount || '?'} reviews)` : 'No rating';
+      const mapsUrl = p.googleMapsUri || '#';
+      return `
+        <div class="bg-white border rounded-lg p-4 shadow-sm">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="font-medium text-sm">${escHtml(name)}</p>
+              <p class="text-xs text-gray-500 mt-0.5">${escHtml(address)}</p>
+            </div>
+            <span class="text-xs text-yellow-600 font-medium ml-4 whitespace-nowrap">${escHtml(rating)}</span>
+          </div>
+          <a href="${escHtml(mapsUrl)}" target="_blank"
+             class="text-xs text-blue-500 hover:underline mt-1 inline-block">View on Maps</a>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
