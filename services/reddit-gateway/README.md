@@ -1,62 +1,68 @@
-# Reddit Gateway
+# Platform Reddit Gateway v2
 
-Read-only HTTP wrapper around the Reddit API using PRAW. Search posts, retrieve subreddit content, and fetch individual posts with comments.
+Reads Reddit via the public JSON API — no OAuth credentials required.
+All retrieved posts and comments are persisted to `platform_v1.reddit` schema
+with pgvector embeddings for semantic search.
+
+**FQDN:** `reddit.platform.ibbytech.com`
 
 ## Endpoints
 
-| FQDN | Purpose |
-|------|---------|
-| `reddit.platform.ibbytech.com` | Reddit content gateway |
+| Method | Path | Description |
+|:---|:---|:---|
+| GET | `/health` | Service status, DB connectivity, config |
+| POST | `/v1/reddit/search` | Search posts — Unicode/kanji supported |
+| POST | `/v1/reddit/subreddit/posts` | Browse listings (hot/new/top/rising) |
+| GET | `/v1/reddit/post/{id}` | Full post + comments, both persisted |
+| GET | `/v1/reddit/subreddit/{name}/info` | Subreddit metadata |
+| POST | `/v1/reddit/saved/search` | Semantic search over stored posts (pgvector) |
+| POST | `/v1/reddit/feeds` | Register a scheduled collection feed |
+| GET | `/v1/reddit/feeds` | List all feeds |
+| DELETE | `/v1/reddit/feeds/{id}` | Remove a feed |
 
-## Quick Start
+## Quick start
 
-1. Create a Reddit "script" app at https://www.reddit.com/prefs/apps
-2. Fill in `.env`:
 ```bash
 cp .env.example .env
+# Edit .env: set REDDIT_USER_AGENT (your Reddit username), PGPASSWORD
 docker compose up --build -d
-curl https://reddit.platform.ibbytech.com/health
+curl http://localhost:8082/health
 ```
 
-## API
+## Key design decisions
 
-### `GET /health`
+- **No credentials** — uses Reddit's public JSON API (`reddit.com/search.json` etc.)
+- **Rate limit** — self-imposed 50 req/min token bucket, respecting Reddit's limits
+- **Cache** — 1-hour Postgres-backed cache avoids repeat Reddit calls for same query
+- **Embeddings** — all posts/comments embedded via LLM Gateway (text-embedding-3-small)
+- **Scheduler** — APScheduler runs all enabled feeds every 6 hours (configurable via FEED_INTERVAL_HOURS)
+
+## Kanji / Unicode search
+
+Reddit's public JSON API accepts full Unicode. To find Japanese-language posts:
 ```json
-{ "ok": true, "credentials_set": true }
+POST /v1/reddit/search
+{"query": "ラーメン", "sort": "relevance", "time_filter": "all"}
 ```
 
-### `POST /v1/reddit/search`
-Search posts by keyword, optionally scoped to a subreddit.
+Note: r/japan and r/japanlife are primarily English-language communities.
+Japanese-language posts appear in communities like r/newsokunomoral and
+Japanese-specific subreddits. Global search (no subreddit restriction) returns
+the widest set of Japanese-language results.
+
+## Shogun seed feeds
+
+| ID | Subreddit | Query | Schedule |
+|:---|:---|:---|:---|
+| 1 | r/japan | ラーメン OR 居酒屋 OR レストラン | daily 2am UTC |
+| 2 | r/japanlife | 食べ物 OR グルメ OR おすすめ | daily 2am UTC |
+| 3 | r/tokyo | ramen OR izakaya OR restaurant | daily 3am UTC |
+| 4 | r/ramen | (top posts) | daily 3am UTC |
+
+## Semantic search example
+
+Search over posts already stored in Postgres — no Reddit call needed:
 ```json
-{
-  "query": "home lab networking",
-  "subreddit": "homelab",
-  "sort": "relevance",
-  "time_filter": "month",
-  "limit": 10
-}
+POST /v1/reddit/saved/search
+{"query": "best ramen Japan authentic local", "limit": 10}
 ```
-
-### `POST /v1/reddit/subreddit/posts`
-Get hot / new / top / rising posts from a subreddit.
-```json
-{
-  "subreddit": "homelab",
-  "sort": "hot",
-  "limit": 25
-}
-```
-
-### `GET /v1/reddit/post/{post_id}?comment_limit=20`
-Fetch a single post with top-level comments.
-
-### `GET /v1/reddit/subreddit/{name}/info`
-Get subscriber count, description, and metadata for a subreddit.
-
-## Reddit App Setup
-
-1. Go to https://www.reddit.com/prefs/apps → "create another app"
-2. Choose **script**
-3. Name it anything (e.g. `platform-reddit-gateway`)
-4. Redirect URI: `http://localhost:8080` (not used for script apps)
-5. Copy the client ID (under the app name) and client secret into `.env`
