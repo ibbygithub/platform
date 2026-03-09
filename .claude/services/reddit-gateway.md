@@ -72,6 +72,109 @@ POST /v1/reddit/feeds
 
 ---
 
+## Feed Management
+
+Feeds are the scheduled collection jobs. They run every 6 hours (configurable).
+All feed management is done via the API — no code changes or container restarts needed.
+
+### How to call the API from svcnode-01
+
+The container is on `platform_net` only (no host port mapping). Get the container
+IP first, then curl against it:
+
+```bash
+# SSH in as devops-agent
+ssh -i ~/.ssh/devops-agent_ed25519_clean devops-agent@192.168.71.220
+
+# Get the container IP (run once per session)
+REDDIT_IP=$(docker inspect platform-reddit-gateway --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+
+# Or call via Traefik FQDN (if DNS is resolving)
+REDDIT_IP=reddit.platform.ibbytech.com
+```
+
+### List all feeds
+
+```bash
+curl -s http://$REDDIT_IP:8082/v1/reddit/feeds | python3 -m json.tool
+```
+
+Response includes `id`, `subreddit`, `query`, `sort`, `time_filter`,
+`limit_per_run`, `cron_expr`, `enabled`, `last_run_at`, `last_run_count`.
+Use the `id` field to delete a feed.
+
+### Add a feed
+
+```bash
+curl -s -X POST http://$REDDIT_IP:8082/v1/reddit/feeds \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "subreddit": "japantravel",
+    "query": "restaurant food local",
+    "sort": "top",
+    "time_filter": "week",
+    "limit_per_run": 25,
+    "cron_expr": "0 2 * * *"
+  }'
+```
+
+**Field reference:**
+
+| Field | Required | Values | Notes |
+|:---|:---|:---|:---|
+| `subreddit` | Yes | any subreddit name | Without r/ prefix |
+| `query` | No | any search string | Omit for top/hot/rising browse with no search |
+| `sort` | No | `top` `hot` `new` `rising` `relevance` | Default: `top` |
+| `time_filter` | No | `all` `year` `month` `week` `day` `hour` | Default: `week` |
+| `limit_per_run` | No | 1–100 | Default: 25 |
+| `cron_expr` | Yes | standard 5-field cron (UTC) | `"0 2 * * *"` = 2am daily |
+
+**Global kanji search (no subreddit restriction):**
+```bash
+curl -s -X POST http://$REDDIT_IP:8082/v1/reddit/feeds \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "ラーメン", "sort": "relevance", "time_filter": "month", "limit_per_run": 25, "cron_expr": "0 2 * * *"}'
+```
+Omitting `subreddit` searches all of Reddit.
+
+### Remove a feed
+
+```bash
+curl -s -X DELETE http://$REDDIT_IP:8082/v1/reddit/feeds/1
+```
+
+### Replace a feed (remove + re-add)
+
+There is no update endpoint — to change a feed, delete it and add a new one:
+
+```bash
+# Step 1 — list to find the ID
+curl -s http://$REDDIT_IP:8082/v1/reddit/feeds | python3 -m json.tool
+
+# Step 2 — delete by ID
+curl -s -X DELETE http://$REDDIT_IP:8082/v1/reddit/feeds/2
+
+# Step 3 — add with corrected config
+curl -s -X POST http://$REDDIT_IP:8082/v1/reddit/feeds \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "グルメ 日本", "sort": "relevance", "time_filter": "month", "limit_per_run": 25, "cron_expr": "0 2 * * *"}'
+```
+
+### Cron expression reference
+
+| Expression | Meaning |
+|:---|:---|
+| `0 2 * * *` | Daily at 2:00 AM UTC |
+| `0 3 * * *` | Daily at 3:00 AM UTC |
+| `0 */12 * * *` | Twice a day (midnight and noon UTC) |
+| `0 2 * * 1` | Weekly on Monday at 2:00 AM UTC |
+
+Note: `cron_expr` documents the intended frequency but the scheduler currently
+runs all feeds on a 6-hour global interval (`FEED_INTERVAL_HOURS`). Per-feed
+cron scheduling is a planned future enhancement.
+
+---
+
 ## Storage
 
 **Database:** `platform_v1`
