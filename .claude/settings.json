@@ -84,6 +84,7 @@
       "Bash(git stash*)",
       "Bash(git fetch*)",
       "Bash(git worktree list*)",
+      "Bash(git ls-files*)",
       "Bash(git checkout *)",
       "Bash(git switch *)",
       "Bash(git add *)",
