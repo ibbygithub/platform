@@ -1,12 +1,13 @@
 # Planning State — IbbyTech Platform
-Last updated: 2026-03-07
+Last updated: 2026-03-09
 
 ## Project Summary
 IbbyTech home lab enterprise-lite platform. Primary proving ground application
-is Project Shogun — an AI travel concierge service. Platform services (scraper,
-Google Places, LLM gateway, Telegram, Reddit) are deployed on svcnode-01 and
-built here first for reuse in future projects. mltrader (ML trading bot using
-10-year bond futures data) is a planned future project, not yet started.
+is Project Shogun — an AI travel concierge service for Japan trips (family use,
+~3 users). Platform services (scraper, Google Places, LLM gateway, Telegram,
+Reddit) are deployed on svcnode-01 and built here first for reuse in future
+projects. n8n is being decommissioned — automation workflows will be custom
+cron-based Python services. mltrader (ML trading bot) is a planned future project.
 
 ## Active Work
 | Item | Description | Phase | Status | Last Updated |
@@ -14,28 +15,39 @@ built here first for reuse in future projects. mltrader (ML trading bot using
 | Scraper service | Web scraper backed by Firecrawl on svcnode-01 | Production | Complete | 2026-03-05 |
 | Google Places gateway | Places search and storage | Production | Complete | 2026-03-06 |
 | LLM gateway | LLM completion service on svcnode-01 | Production | Complete | 2026-03-01 |
-| Reddit gateway | Deployed 2026-03-02 | Production | Complete — docs pending | 2026-03-02 |
-| MVP Testing Dashboard | localhost:8000 platform test harness | Phase 0 — Validation | Approved — start with validate_connectivity.py + validate_llm_gateway.py | 2026-03-07 |
+| Reddit gateway | Credential-free v2, deployed, tested | Production | Complete | 2026-03-08 |
+| MVP Testing Dashboard | localhost:8000 platform test harness | Production | Complete | 2026-03-08 |
+| MCP Infrastructure — Env 1 | Playwright, GitHub, PostgreSQL, Memory MCP on laptop | Phase 1 ready | Plan approved — awaiting execution | 2026-03-09 |
+| MCP Infrastructure — Env 2 | Platform MCP servers on svcnode-01 | Phase 1 deferred | Awaiting Shogun MVP stability | 2026-03-09 |
 
 ## Open Decisions
-- **Google Places routing:** `platform_v1.places` vs `shogun_v1.places` — canonical dataset ownership unresolved. Must be decided before Shogun build begins.
-- **Web frontend for Project Shogun (MVP 2):** Full application deferred. Will be built on top of the MVP Testing Dashboard once validated.
-- **brainnode-01 document storage:** Deferred to MVP 2. MVP 1 uses local SQLite on laptop.
-- **Authentication:** No auth in MVP 1. Future production plan: Cloudflare + Google OAuth for Project Shogun.
+- **Google Places routing:** `platform_v1.places` vs `shogun_v1.places` — canonical
+  dataset ownership unresolved. Must be decided before Shogun build begins.
+- **Memory MCP technology choice:** Mem0 vs. @modelcontextprotocol/server-memory +
+  custom vs. bespoke FastAPI service. Requires vetting session before Env 2 Phase 1.
+- **Option C (LLM gateway tool orchestration):** Design deferred to OpenRouter
+  planning session. Do not build before OpenRouter architecture is decided.
+- **Google API auth scope:** Which Google APIs are currently enabled on the
+  existing key? Separate conversation required before any Google MCP work.
 
 ## Technology Registry
 | Technology | Role | Rationale | Date |
 |------------|------|-----------|------|
-| Traefik v3 | Reverse proxy on svcnode-01 | Label-based Docker service discovery, automatic cert management — selected over nginx | 2026-03-01 |
+| Traefik v3 | Reverse proxy on svcnode-01 | Label-based Docker service discovery, automatic cert management | 2026-03-01 |
 | PostgreSQL 17 | Primary database on dbnode-01 | Enterprise-grade, pgvector support | 2026-02-15 |
 | Docker Compose | Service orchestration | Standard for multi-service deployment on svcnode-01 | 2026-02-15 |
-| Firecrawl | Web scraping engine | Managed service with JS rendering — selected over raw BeautifulSoup | 2026-03-04 |
+| Firecrawl | Web scraping engine | Managed service with JS rendering | 2026-03-04 |
 | Python 3.x | Service runtime | Default for platform services | 2026-02-15 |
-| FastAPI | Web framework for MVP dashboard | Python-first, async, serves Jinja2 templates — selected for localhost MVP | 2026-03-07 |
-| pdfplumber | PDF text extraction | Cleanest API for text + layout extraction, pure Python — approved for MVP dashboard | 2026-03-07 |
-| python-docx | Word document extraction | De facto standard for .docx in Python — approved for MVP dashboard | 2026-03-07 |
-| SQLite | Local embedding store (MVP) | Throwaway MVP storage — upgrade path to platform_v1 pgvector in MVP 2 | 2026-03-07 |
-| OpenAI embeddings | text-embedding-3-small via API | Consistent with scraper service approach, key already in platform .env | 2026-03-07 |
+| FastAPI | Web framework | Python-first, async — used for platform services and Shogun | 2026-03-07 |
+| pdfplumber | PDF text extraction | Cleanest API, pure Python | 2026-03-07 |
+| python-docx | Word document extraction | De facto standard for .docx | 2026-03-07 |
+| SQLite | Local embedding store (MVP dashboard only) | Throwaway MVP — upgrade path to pgvector documented | 2026-03-07 |
+| OpenAI embeddings | text-embedding-3-small | Consistent with scraper, key in platform .env | 2026-03-07 |
+| Gemini 2.0 Flash | Shogun LLM (current) | Strong results, low cost, multimodal (receipt OCR) | 2026-03-09 |
+| MCP @playwright/mcp | Claude Code agent browser tool | Microsoft-maintained, web browsing during sessions | 2026-03-09 |
+| MCP github-mcp-server | Claude Code agent GitHub tool | GitHub official, repo/issue/PR access | 2026-03-09 |
+| MCP server-postgres | Claude Code agent DB tool | MCP org official, direct DB query during sessions | 2026-03-09 |
+| MCP server-memory | Claude Code agent memory | MCP org official, persist context across sessions | 2026-03-09 |
 
 ## Decision Log
 
@@ -43,50 +55,83 @@ built here first for reuse in future projects. mltrader (ML trading bot using
 - Capability need: Route HTTP traffic to multiple services on svcnode-01
 - Options considered: nginx, Caddy, Traefik v3, HAProxy
 - Decision: Traefik v3
-- Reasoning: Label-based Docker service discovery, native Let's Encrypt, best fit for growing multi-service architecture
+- Reasoning: Label-based Docker service discovery, native Let's Encrypt
 - Risk accepted: None significant
 
 ### Scraper Firecrawl Connection Pattern — 2026-03-06
 - Capability need: Scraper service must reach Firecrawl across separate Docker networks
 - Options considered: Join firecrawl to platform_net, host.docker.internal, direct IP
 - Decision: host.docker.internal:3002 (HOST_IP pattern)
-- Reasoning: Firecrawl root-owned legacy service on separate network. Host routing avoids reconfiguration risk.
-- Risk accepted: Host network dependency — if Firecrawl port changes, scraper .env must be updated
+- Reasoning: Firecrawl root-owned legacy service on separate network
+- Risk accepted: Host network dependency — if Firecrawl port changes, scraper .env must update
 
-### MVP Dashboard Document Extraction Libraries — 2026-03-07
-- Capability need: Extract text from PDF, Word, TXT, Markdown for RAG pipeline
-- Options considered: pdfplumber vs PyMuPDF vs pypdf (PDF); python-docx is uncontested for Word
-- Decision: pdfplumber + python-docx
-- Reasoning: pdfplumber has cleanest text extraction API with no system dependencies; python-docx is the only viable option for .docx
-- Risk accepted: None
+### MVP Dashboard Technology — 2026-03-07
+- Decisions: pdfplumber + python-docx, local SQLite for MVP, FastAPI + Jinja2
+- Reasoning: Speed to build, fully throwaway for MVP scope
+- Risk accepted: SQLite embeddings need re-generation on migrate to pgvector
 
-### MVP Dashboard Embedding Storage — 2026-03-07
-- Capability need: Store document embeddings for RAG query
-- Options considered: platform_v1 pgvector on dbnode-01, local SQLite, in-memory
-- Decision: Local SQLite for MVP 1
-- Reasoning: Keep MVP fast to build and self-contained on laptop. No schema changes to platform_v1 needed for day-1 testing. Upgrade path to pgvector is documented.
-- Risk accepted: SQLite is throwaway — embeddings will need to be re-generated when migrating to platform_v1 in MVP 2
+### MCP Protocol Strategy — 2026-03-09
+- Capability need: AI tool calling for Shogun and Claude Code agent sessions
+- Problem identified: Gemini 2.0 Flash uses Function Calling API, not MCP protocol.
+  Building MCP servers for Shogun during the reboot would require a translation
+  layer that competes with the frontend delivery timeline.
+- Options considered:
+  - Option A: Switch Shogun to Claude (native MCP)
+  - Option B: Keep Gemini, build Function Calling ↔ MCP adapter
+  - Option C: LLM gateway as model-agnostic tool orchestration layer
+- Decision: Option C — deferred to OpenRouter planning session
+- Reasoning: Shogun reboot uses direct REST calls (proven, no risk). Option C is
+  designed once, correctly, when OpenRouter is added as a platform service.
+  Option B creates maintenance burden for every MCP schema change.
+- Risk accepted: No MCP tool calling in Shogun until after MVP is stable (~2 weeks)
 
-### MVP Dashboard Phase 0 — Validation-First Approach — 2026-03-07
-- Decision: Add Phase 0 (prerequisite validation scripts) before any dashboard code is written
-- Reasoning: LLM gateway suspected not fully tested for external access. Discovering a broken gateway mid-build wastes the build day. All red findings must be resolved to green before Phase 1 begins.
-- Scripts: validate_connectivity.py (network/port reachability), validate_llm_gateway.py (API + SSH container audit)
+### MCP Domain Separation — 2026-03-09
+- Decision: REST API gateways and MCP servers are separate containers, separate
+  docker-compose stacks, separate Traefik routes. No colocation.
+- Reasoning: MCP protocol lifecycle is independent of REST API stability.
+  If MCP servers are deprecated or change, REST gateways are unaffected.
 - Risk accepted: None — this reduces risk
 
-### MVP Dashboard Frontend Technology — 2026-03-07
-- Capability need: Simple web UI served from localhost:8000
-- Options considered: FastAPI + Jinja2 + vanilla JS, Streamlit, Next.js
-- Decision: FastAPI + Jinja2 templates + minimal vanilla JS (fetch for AJAX)
-- Reasoning: Python-first, no build step, sufficient for testing harness scope. Streamlit rejected — known rewrite required since this becomes Shogun foundation. Next.js rejected — too heavy for a 1-day localhost tool.
-- Risk accepted: None for MVP scope
+### n8n Decommission — Automation Replacement Pattern — 2026-03-09
+- Decision: n8n is being decommissioned. Automation workflows become custom
+  cron-based Python services on brainnode-01 or small svcnode-01 services.
+- Reasoning: User preference to build automations with Claude Code agent directly.
+  Keeps platform stack coherent and eliminates n8n maintenance burden.
+- Impact: YouTube monitoring, RSS, calendar sync, and similar automations will
+  be purpose-built Python services, not n8n workflows.
+- Risk accepted: More custom code to maintain, but full control over behavior
 
 ## Backlog
-- Reddit gateway service doc: Deployed 2026-03-02, still pending. Run /register-service.
-- MCP architecture: mcp_shogun dormant on dbnode-01 — architecture decision needed
-- brainnode-01 onboarding: No projects deployed yet. SSH key setup and git permissions needed before any service can be deployed there.
-- mltrader project: New project under C:\git\work\mltrader — not started, planning not yet initiated
+- **Shogun reboot:** Separate project conversation. FastAPI, Docker, svcnode-01.
+  Frontend (mobile-friendly dashboard): weather, blossom tracking, local news,
+  calendar, lodging/contacts/itinerary. Reboot date: 2026-03-10.
+  Tech: Gemini 2.0 Flash, Telegram bot interface, direct REST calls to platform.
+- **OpenRouter platform service:** Model selection per application. Required before
+  Option C (LLM gateway tool orchestration) can be designed. Own planning session.
+- **MCP Env 2 — Memory technology vetting:** Mem0 vs. alternatives. Required
+  before Phase 1 execution (~2 weeks post Shogun MVP).
+- **Google API auth audit:** Which APIs are currently enabled on existing key?
+  Required before Google Maps/Calendar/YouTube/Translate MCP work begins.
+- **Google Workspace CLI evaluation:** googleworkspace/cli is a CLI tool, not
+  an MCP server. If Workspace integration (Calendar, Drive, Gmail) is needed,
+  requires separate vetting. Separate conversation.
+- **Translation services (Japanese ↔ English, written + spoken):** Google Translate
+  and Speech-to-Text APIs. Deferred until Google API auth is resolved.
+- **YouTube monitoring service:** Cron-based Python, saves to DB/folder.
+  Deferred post-Shogun MVP.
+- **RSS feed service:** Cron-based Python. Deferred post-Shogun MVP.
+- **Expense tracking:** Web page in Shogun app. Image OCR via Gemini multimodal
+  (receipt photo → structured data). Deferred to Shogun Phase 2.
+- **Location-aware geofencing:** Alert when near saved location (knife store
+  Tokyo example). Requires memory entity model with geofence metadata. Design
+  during Memory MCP vetting session.
+- **Garmin fitness integration:** Low priority, own project. Not in active backlog.
+- **mltrader project:** Not started, planning not yet initiated.
+- **brainnode-01 onboarding:** No projects deployed yet. SSH key and git
+  permissions needed before any service can be deployed there.
 
 ## Planning Documents
 | Document | Path | Status |
 |----------|------|--------|
-| MVP Testing Dashboard Plan | outputs/planning/mvp-dashboard-plan.md | Approved — ready for execution |
+| MVP Testing Dashboard Plan | outputs/planning/mvp-dashboard-plan.md | Complete |
+| MCP Infrastructure Plan | outputs/planning/mcp-infrastructure-plan.md | Approved — phased execution |
