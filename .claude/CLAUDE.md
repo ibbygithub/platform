@@ -88,6 +88,22 @@ Evaluate the output against these criteria:
 | Currently on `main` branch | Immediately switch to `develop`, report this action |
 | Merge conflicts present | Stop, report in full, do not proceed until resolved |
 
+### Step 2.5 — Security Scan
+
+Load `.claude/skills/ciso-security.md` and run Trigger Point 1 checks.
+All four commands are Green Zone — run as separate Bash calls, no confirmation needed.
+
+```bash
+git ls-files | grep -i "\.env"
+cat .gitignore | grep -i env
+git log --oneline -20 | grep -iE "env|secret|token|key|credential|password"
+git ls-files services/ | grep -i "\.env"
+```
+
+Capture results for inclusion in the Session Brief (Step 4).
+If any check flags an issue, note it in the brief — do not block session startup,
+but do surface it clearly so it can be addressed before task work begins.
+
 ### Step 3 — Derive Last Work Context
 
 Use the `Glob` tool to list `outputs/validation/*.md`, then use the `Read` tool
@@ -110,6 +126,9 @@ Produce the following formatted output before asking for task input:
 ║  Last Abandoned:  <task name and date, or none>                ║
 ║  Open Items:      <service docs pending, stale branches, etc>  ║
 ║  Rules Loaded:    01 ✓  02 ✓  03 ✓  04 ✓                      ║
+║  🔐 Security:     .env tracked: <none ✓ / FLAGGED: filename>  ║
+║                   .gitignore:   <covered ✓ / MISSING>         ║
+║                   Log hits:     <none ✓ / review: ref>        ║
 ╚══════════════════════════════════════════════════════════════════╝
 ```
 
