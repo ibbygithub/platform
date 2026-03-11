@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "description": "Synthetic Google Places fixture data — Tokyo locations for Shogun testing",
+    "last_updated": "2026-03-11",
+    "count": 5
+  },
+  "places": [
+    {
+      "place_id": "TEST_PLACE_001",
+      "name": "Fuunji Ramen",
+      "types": ["restaurant", "food", "point_of_interest", "establishment"],
+      "vicinity": "2-14-3 Yoyogi, Shibuya-ku, Tokyo",
+      "formatted_address": "2-14-3 Yoyogi, Shibuya-ku, Tokyo 151-0053, Japan",
+      "geometry": {
+        "location": { "lat": 35.6834, "lng": 139.7023 }
+      },
+      "rating": 4.4,
+      "user_ratings_total": 1842,
+      "price_level": 1,
+      "opening_hours": { "open_now": true },
+      "business_status": "OPERATIONAL"
+    },
+    {
+      "place_id": "TEST_PLACE_002",
+      "name": "Ichiran Shinjuku",
+      "types": ["restaurant", "food", "point_of_interest", "establishment"],
+      "vicinity": "3-34-11 Shinjuku, Shinjuku-ku, Tokyo",
+      "formatted_address": "3-34-11 Shinjuku, Shinjuku-ku, Tokyo 160-0022, Japan",
+      "geometry": {
+        "location": { "lat": 35.6897, "lng": 139.7006 }
+      },
+      "rating": 4.2,
+      "user_ratings_total": 3210,
+      "price_level": 2,
+      "opening_hours": { "open_now": true },
+      "business_status": "OPERATIONAL"
+    },
+    {
+      "place_id": "TEST_PLACE_003",
+      "name": "Tsukiji Outer Market",
+      "types": ["food", "market", "point_of_interest", "establishment"],
+      "vicinity": "4-16-2 Tsukiji, Chuo-ku, Tokyo",
+      "formatted_address": "4-16-2 Tsukiji, Chuo-ku, Tokyo 104-0045, Japan",
+      "geometry": {
+        "location": { "lat": 35.6654, "lng": 139.7706 }
+      },
+      "rating": 4.3,
+      "user_ratings_total": 8900,
+      "price_level": 2,
+      "opening_hours": { "open_now": false },
+      "business_status": "OPERATIONAL"
+    },
+    {
+      "place_id": "TEST_PLACE_004",
+      "name": "Senso-ji Temple",
+      "types": ["hindu_temple", "tourist_attraction", "place_of_worship", "point_of_interest", "establishment"],
+      "vicinity": "2-3-1 Asakusa, Taito-ku, Tokyo",
+      "formatted_address": "2-3-1 Asakusa, Taito-ku, Tokyo 111-0032, Japan",
+      "geometry": {
+        "location": { "lat": 35.7148, "lng": 139.7967 }
+      },
+      "rating": 4.6,
+      "user_ratings_total": 67000,
+      "price_level": null,
+      "opening_hours": { "open_now": true },
+      "business_status": "OPERATIONAL"
+    },
+    {
+      "place_id": "TEST_PLACE_005",
+      "name": "Nakameguro Riverside Walk",
+      "types": ["tourist_attraction", "point_of_interest", "establishment"],
+      "vicinity": "Nakameguro, Meguro-ku, Tokyo",
+      "formatted_address": "Nakameguro, Meguro-ku, Tokyo 153-0061, Japan",
+      "geometry": {
+        "location": { "lat": 35.6439, "lng": 139.6992 }
+      },
+      "rating": 4.5,
+      "user_ratings_total": 4200,
+      "price_level": null,
+      "opening_hours": null,
+      "business_status": "OPERATIONAL"
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "_meta": {
+    "description": "LLM gateway test fixtures — standard prompts for functional validation",
+    "last_updated": "2026-03-11",
+    "count": 5,
+    "note": "These prompts are designed to produce deterministic or near-deterministic responses. Tests validate response FORMAT, not content — LLM output is non-deterministic by nature. The echo and format-check prompts are the most reliable for automated pass/fail."
+  },
+  "chat_prompts": [
+    {
+      "fixture_id": "LLM_CHAT_001",
+      "name": "echo_check",
+      "description": "Asks model to return a specific token. Most reliable for automated pass/fail.",
+      "messages": [
+        { "role": "user", "content": "Reply with exactly the word: GATEWAY_OK" }
+      ],
+      "max_output_tokens": 20,
+      "validation": {
+        "type": "contains",
+        "expected": "GATEWAY_OK",
+        "case_sensitive": false
+      }
+    },
+    {
+      "fixture_id": "LLM_CHAT_002",
+      "name": "json_format_check",
+      "description": "Verifies model can return valid JSON — validates structured output capability.",
+      "messages": [
+        { "role": "user", "content": "Return a JSON object with exactly two keys: 'status' set to 'ok' and 'service' set to 'llm-gateway'. Return only the JSON, no other text." }
+      ],
+      "max_output_tokens": 50,
+      "validation": {
+        "type": "json_keys",
+        "expected_keys": ["status", "service"]
+      }
+    },
+    {
+      "fixture_id": "LLM_CHAT_003",
+      "name": "japanese_language_check",
+      "description": "Verifies Japanese language output — relevant for Shogun use case.",
+      "messages": [
+        { "role": "user", "content": "Translate 'Good morning' to Japanese. Return only the Japanese text, no romanization." }
+      ],
+      "max_output_tokens": 20,
+      "validation": {
+        "type": "contains_unicode_range",
+        "description": "Response should contain Japanese characters (hiragana/katakana/kanji)",
+        "note": "Manual verification — automated check confirms non-empty response"
+      }
+    },
+    {
+      "fixture_id": "LLM_CHAT_004",
+      "name": "multi_turn_check",
+      "description": "Verifies multi-turn conversation context is maintained.",
+      "messages": [
+        { "role": "user", "content": "Remember the number 42." },
+        { "role": "assistant", "content": "I'll remember the number 42." },
+        { "role": "user", "content": "What number did I ask you to remember? Reply with just the number." }
+      ],
+      "max_output_tokens": 10,
+      "validation": {
+        "type": "contains",
+        "expected": "42",
+        "case_sensitive": false
+      }
+    },
+    {
+      "fixture_id": "LLM_CHAT_005",
+      "name": "provider_routing_check",
+      "description": "Tests explicit provider routing — used to verify each provider path works.",
+      "variants": [
+        {
+          "provider": "google",
+          "model": "gemini-2.0-flash",
+          "messages": [{ "role": "user", "content": "Reply with: GEMINI_OK" }],
+          "validation": { "type": "contains", "expected": "GEMINI_OK", "case_sensitive": false }
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4o-mini",
+          "messages": [{ "role": "user", "content": "Reply with: OPENAI_OK" }],
+          "validation": { "type": "contains", "expected": "OPENAI_OK", "case_sensitive": false }
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-haiku-4-5-20251001",
+          "messages": [{ "role": "user", "content": "Reply with: ANTHROPIC_OK" }],
+          "validation": { "type": "contains", "expected": "ANTHROPIC_OK", "case_sensitive": false }
+        }
+      ]
+    }
+  ],
+  "embedding_prompts": [
+    {
+      "fixture_id": "LLM_EMBED_001",
+      "name": "basic_embedding_check",
+      "description": "Verifies embedding endpoint returns a vector of expected dimensions.",
+      "input": ["platform validation test"],
+      "expected_dimensions": 1536,
+      "note": "text-embedding-3-small returns 1536 dimensions. If model changes, update this fixture."
+    },
+    {
+      "fixture_id": "LLM_EMBED_002",
+      "name": "batch_embedding_check",
+      "description": "Verifies batch embedding — multiple inputs in one call.",
+      "input": [
+        "Tokyo ramen restaurant",
+        "Cherry blossom viewing spot",
+        "Traditional Japanese inn"
+      ],
+      "expected_count": 3,
+      "expected_dimensions": 1536
+    }
+  ]
+}
