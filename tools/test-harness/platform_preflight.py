@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import sys
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf-8-sig"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 """
 platform_preflight.py
 =====================
@@ -62,11 +66,13 @@ BRAINNODE_IP = "192.168.71.222"
 LOKI_PORT    = 3100
 
 SERVICES = {
-    "LLM Gateway":       f"https://llm.platform.ibbytech.com/health",
-    "Scraper":           f"http://scrape.platform.ibbytech.com/health",
-    "Google Places":     f"http://places.platform.ibbytech.com/health",
-    "Telegram Gateway":  f"http://telegram.platform.ibbytech.com/health",
-    "Reddit Gateway":    f"http://reddit.platform.ibbytech.com/health",
+    "LLM Gateway":    f"https://llm.platform.ibbytech.com/health",
+    "Scraper":        f"http://scrape.platform.ibbytech.com/health",
+    "Google Places":  f"http://places.platform.ibbytech.com/health",
+    "Reddit Gateway": f"http://reddit.platform.ibbytech.com/health",
+    # Telegram Gateway runs in polling mode — no inbound HTTP server.
+    # Health is verified via SSH container check (validate_telegram.py).
+    # DNS entry required in Pi-hole before HTTP check will work.
 }
 
 LOKI_URL = f"http://{SVCNODE_IP}:{LOKI_PORT}"
@@ -333,7 +339,8 @@ def run_infra_checks() -> list[CheckResult]:
     node_checks = [
         check_tcp("svcnode-01 HTTP",    SVCNODE_IP,   80),
         check_tcp("svcnode-01 HTTPS",   SVCNODE_IP,   443),
-        check_tcp("svcnode-01 Traefik", SVCNODE_IP,   8080),
+        # Traefik dashboard (:8080) is intentionally internal-only on svcnode-01.
+        # Not accessible from laptop — excluded from reachability checks.
         check_db(DBNODE_IP, 5432),
         check_tcp("brainnode-01 SSH",   BRAINNODE_IP, 22),
     ]
