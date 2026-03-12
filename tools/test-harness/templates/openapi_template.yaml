@@ -1,0 +1,228 @@
+openapi: "3.1.0"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IbbyTech Platform — OpenAPI Spec Template
+# Copy this file to services/{service-name}/openapi.yaml and fill in all
+# REPLACE markers. Remove all comment lines starting with # before committing.
+#
+# Platform standard:
+#   - Every service requires a spec at services/{name}/openapi.yaml
+#   - Spec must cover ALL endpoints — health + every API endpoint
+#   - Request and response schemas must be defined (not $ref'd to nowhere)
+#   - Auth method must be documented even if "no auth required"
+#   - Spec is API-first: draft this BEFORE writing service code
+#
+# LLM Gateway special case:
+#   See services/llm-gateway/openapi.yaml — uses provider discriminator pattern
+#   to document OpenAI, Gemini, and Anthropic paths in a single spec.
+# ─────────────────────────────────────────────────────────────────────────────
+
+info:
+  title: "{SERVICE_NAME} Gateway"            # REPLACE: e.g. "Reddit Gateway"
+  version: "1.0.0"
+  description: |
+    IbbyTech Platform service — {SERVICE_NAME}.
+    REPLACE: One paragraph describing what this service does, what it consumes,
+    and which platform services it depends on (LLM gateway, scraper, etc.)
+  contact:
+    name: "IbbyTech Platform"
+
+servers:
+  - url: "http://{service}.platform.ibbytech.com"   # REPLACE: actual FQDN
+    description: "svcnode-01 (internal network only)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Auth
+# ─────────────────────────────────────────────────────────────────────────────
+# Choose one pattern and delete the others.
+
+# Pattern A — Bearer token (API key in Authorization header)
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: "API key passed as Bearer token. Set in service .env as {SERVICE}_API_KEY."
+
+# Pattern B — No authentication (internal network only)
+# components:
+#   securitySchemes: {}
+# security: []
+
+# Apply security globally — override per-endpoint if some endpoints are open
+security:
+  - BearerAuth: []
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Health endpoint (required for every service) ───────────────────────────
+  /health:
+    get:
+      summary: "Service health and dependency status"
+      description: |
+        Returns service health status. Called by platform_preflight.py and
+        validate scripts. Must return HTTP 200 when service is operational.
+      security: []    # Health is always unauthenticated
+      operationId: "getHealth"
+      responses:
+        "200":
+          description: "Service is healthy"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: "Service is unhealthy or dependencies unavailable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── REPLACE: First API endpoint ────────────────────────────────────────────
+  /v1/{service}/search:                    # REPLACE: actual path
+    post:
+      summary: "REPLACE: endpoint summary (one line)"
+      description: |
+        REPLACE: Full description. Include:
+        - What this endpoint does
+        - What upstream service it calls (Firecrawl, LLM gateway, etc.)
+        - Whether results are persisted to the database
+        - Rate limit behaviour if applicable
+      operationId: "searchSomething"       # REPLACE: camelCase, unique
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"    # REPLACE
+            example:
+              query: "ramen Tokyo"         # REPLACE: realistic example
+              limit: 10
+      responses:
+        "200":
+          description: "Results returned successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"  # REPLACE
+        "400":
+          description: "Invalid request — missing required fields or bad format"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "Rate limit exceeded"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: "Upstream service error (external API failure)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Add more paths following the same pattern. One path block per endpoint.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Component Schemas
+# ─────────────────────────────────────────────────────────────────────────────
+
+  schemas:
+
+    # ── Health response ───────────────────────────────────────────────────────
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, error]
+          description: "Overall service status"
+        service:
+          type: string
+          description: "Service name — matches service= Loki label"
+          example: "{service}"             # REPLACE: actual service name
+        version:
+          type: string
+          description: "Service version"
+          example: "1.0.0"
+        dependencies:
+          type: object
+          description: "Status of each dependency this service requires"
+          additionalProperties:
+            type: string
+            enum: [ok, error, not_configured]
+          example:
+            database: "ok"
+            llm_gateway: "ok"
+
+    # ── REPLACE: Request schema ───────────────────────────────────────────────
+    SearchRequest:                          # REPLACE: actual schema name
+      type: object
+      required:
+        - query                             # REPLACE: list all required fields
+      properties:
+        query:
+          type: string
+          description: "REPLACE: field description"
+          minLength: 1
+          maxLength: 500
+          example: "ramen Tokyo"
+        limit:
+          type: integer
+          description: "Maximum number of results to return"
+          minimum: 1
+          maximum: 100
+          default: 10
+
+    # ── REPLACE: Response schema ──────────────────────────────────────────────
+    SearchResponse:                         # REPLACE: actual schema name
+      type: object
+      required: [results, total]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"   # REPLACE
+        total:
+          type: integer
+          description: "Total number of results returned"
+        query:
+          type: string
+          description: "Echo of the query as received"
+
+    # ── REPLACE: Result item schema ───────────────────────────────────────────
+    SearchResult:                           # REPLACE: actual schema name
+      type: object
+      required: [id, content]              # REPLACE: list required fields
+      properties:
+        id:
+          type: string
+          description: "Unique identifier for this result"
+        content:
+          type: string
+          description: "REPLACE: what this field contains"
+        created_at:
+          type: string
+          format: date-time
+          description: "ISO 8601 timestamp of when this record was stored"
+
+    # ── Standard error response (do not modify — platform standard) ───────────
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: "Human-readable error description"
+          example: "query parameter is required"
+        detail:
+          type: string
+          description: "Additional error detail or upstream error message"

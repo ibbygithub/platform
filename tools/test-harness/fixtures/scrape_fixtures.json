@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "description": "Pre-canned scrape result fixtures — books.toscrape.com (stable public test target)",
+    "last_updated": "2026-03-11",
+    "count": 3,
+    "note": "books.toscrape.com is a purpose-built scraping test site with stable content. Safe to use as a live test target or as fixture data when offline testing is needed."
+  },
+  "scrape_results": [
+    {
+      "fixture_id": "SCRAPE_001",
+      "url": "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html",
+      "title": "A Light in the Attic",
+      "markdown_excerpt": "# A Light in the Attic\n\n**Price:** £51.77\n**Rating:** Three\n**Availability:** In stock (22 available)\n\nIt's hard to imagine a world without A Light in the Attic...",
+      "metadata": {
+        "statusCode": 200,
+        "sourceURL": "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html",
+        "title": "A Light in the Attic",
+        "description": "A Light in the Attic from Books to Scrape"
+      },
+      "expected_fields": ["title", "price", "rating", "availability"]
+    },
+    {
+      "fixture_id": "SCRAPE_002",
+      "url": "https://books.toscrape.com/catalogue/tipping-the-velvet_999/index.html",
+      "title": "Tipping the Velvet",
+      "markdown_excerpt": "# Tipping the Velvet\n\n**Price:** £53.74\n**Rating:** One\n**Availability:** In stock (20 available)\n\n\"Tipping the Velvet\" is a phrase Victorian slang for...",
+      "metadata": {
+        "statusCode": 200,
+        "sourceURL": "https://books.toscrape.com/catalogue/tipping-the-velvet_999/index.html",
+        "title": "Tipping the Velvet",
+        "description": "Tipping the Velvet from Books to Scrape"
+      },
+      "expected_fields": ["title", "price", "rating", "availability"]
+    },
+    {
+      "fixture_id": "SCRAPE_003",
+      "url": "https://books.toscrape.com/catalogue/page-1.html",
+      "title": "Books to Scrape — Page 1",
+      "markdown_excerpt": "## Books to Scrape\n\n1000 books in stock\n\n- A Light in the Attic — £51.77\n- Tipping the Velvet — £53.74\n- Soumission — £50.10\n...",
+      "metadata": {
+        "statusCode": 200,
+        "sourceURL": "https://books.toscrape.com/catalogue/page-1.html",
+        "title": "All products | Books to Scrape - Sandbox"
+      },
+      "expected_fields": ["book_list", "pagination"]
+    }
+  ],
+  "extract_schema": {
+    "description": "Standard extract schema for books.toscrape.com — used in Step 5 (Extract) tests",
+    "schema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "book_title":   { "type": "string", "description": "Title of the book" },
+          "price":        { "type": "string", "description": "Listed price (e.g. '£51.77')" },
+          "star_rating":  { "type": "string", "description": "Rating word (One/Two/Three/Four/Five)" },
+          "availability": { "type": "string", "description": "Stock status" }
+        },
+        "required": ["book_title", "price"]
+      }
+    },
+    "prompt": "Extract a list of books from this page. For each book capture: book_title, price, star_rating (as a word like One/Two/Three/Four/Five), and availability."
+  }
+}

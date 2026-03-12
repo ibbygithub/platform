@@ -88,10 +88,42 @@ Evaluate the output against these criteria:
 | Currently on `main` branch | Immediately switch to `develop`, report this action |
 | Merge conflicts present | Stop, report in full, do not proceed until resolved |
 
-### Step 2.5 — Security Scan
+### Step 2.5 — Task Onboarding Preflight (Stage 2 — Part A)
+
+Before any build task begins, run the platform infrastructure readiness check:
+
+```bash
+python tools/test-harness/platform_preflight.py
+```
+
+This is Green Zone — runs from the laptop, no SSH, no state change.
+If the preflight reports any FAIL: surface it in the Session Brief and
+report to the human before accepting task work. Do not begin a build task
+against a broken infrastructure state.
+
+For targeted checks (e.g., only need to verify services):
+```bash
+python tools/test-harness/platform_preflight.py --services
+python tools/test-harness/platform_preflight.py --infra
+python tools/test-harness/platform_preflight.py --loki
+```
+
+**Stage 2 — Part B (Capability Pre-check):**
+Before building any feature that consumes an upstream platform service,
+read the relevant service doc in `.claude/services/{name}.md` and check
+the `## Capabilities` section for the feature you need.
+
+| Capability status | Action |
+|:------------------|:-------|
+| `implemented` | Proceed — feature is available and documented |
+| `available-upstream` | Feature exists in upstream API but not yet in our gateway. Document the gap; task scope may expand to implement it. |
+| `not-available` | Hard stop — report before any build work starts |
+
+### Step 2.6 — Security Scan
 
 Load `.claude/skills/ciso-security.md` and run Trigger Point 1 checks.
 All four commands are Green Zone — run as separate Bash calls, no confirmation needed.
+(Step renumbered from 2.5 to 2.6 — preflight inserted above as Step 2.5)
 
 ```bash
 git ls-files | grep -i "\.env"

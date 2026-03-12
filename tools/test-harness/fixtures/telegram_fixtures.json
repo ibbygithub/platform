@@ -1,0 +1,61 @@
+{
+  "_meta": {
+    "description": "Telegram gateway test fixtures — message payloads for functional validation",
+    "last_updated": "2026-03-11",
+    "count": 3,
+    "note": "Telegram tests require a TEST_CHAT_ID env var pointing to a non-production chat (e.g., a dedicated test bot conversation or a private test channel). Never use production chat IDs in validate scripts. The validate_telegram.py script must skip send tests if TEST_CHAT_ID is not set — logging a WARN, not a FAIL."
+  },
+  "message_payloads": [
+    {
+      "fixture_id": "TG_MSG_001",
+      "name": "plain_text_message",
+      "description": "Basic text message — confirms send endpoint is functional.",
+      "payload": {
+        "message": "Platform validation test — plain text. Timestamp: {timestamp}",
+        "parse_mode": null
+      },
+      "validation": {
+        "type": "http_200",
+        "check_message_id": true
+      }
+    },
+    {
+      "fixture_id": "TG_MSG_002",
+      "name": "markdown_message",
+      "description": "Markdown-formatted message — confirms parse_mode handling.",
+      "payload": {
+        "message": "*Platform Test* — Markdown formatting\n\n`validate_telegram.py` — Step 2\nTimestamp: {timestamp}",
+        "parse_mode": "MarkdownV2"
+      },
+      "validation": {
+        "type": "http_200",
+        "check_message_id": true
+      }
+    },
+    {
+      "fixture_id": "TG_MSG_003",
+      "name": "structured_alert_message",
+      "description": "Simulates a platform alert format — validates the pattern used by monitoring.",
+      "payload": {
+        "message": "🔔 *Platform Alert Test*\n\nService: `validate-harness`\nStatus: OK\nTimestamp: {timestamp}\n\nThis is a test message from the platform validate suite\\.",
+        "parse_mode": "MarkdownV2"
+      },
+      "validation": {
+        "type": "http_200",
+        "check_message_id": true
+      }
+    }
+  ],
+  "required_env_vars": {
+    "TEST_CHAT_ID": {
+      "description": "Non-production Telegram chat ID for test messages",
+      "required": true,
+      "skip_behavior": "If not set, send tests are SKIPPED (WARN) — not FAILED"
+    },
+    "TELEGRAM_BOT_TOKEN": {
+      "description": "Bot token for the Telegram gateway",
+      "required": true,
+      "skip_behavior": "If not set, all tests FAIL immediately"
+    }
+  }
+}

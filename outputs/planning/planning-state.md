@@ -1,5 +1,5 @@
 # Planning State — IbbyTech Platform
-Last updated: 2026-03-09
+Last updated: 2026-03-11
 
 ## Project Summary
 IbbyTech home lab enterprise-lite platform. Primary proving ground application
@@ -19,6 +19,7 @@ cron-based Python services. mltrader (ML trading bot) is a planned future projec
 | MVP Testing Dashboard | localhost:8000 platform test harness | Production | Complete | 2026-03-08 |
 | MCP Infrastructure — Env 1 | Playwright, GitHub, PostgreSQL, Memory MCP on laptop | Phase 1 ready | Plan approved — awaiting execution | 2026-03-09 |
 | MCP Infrastructure — Env 2 | Platform MCP servers on svcnode-01 | Phase 1 deferred | Awaiting Shogun MVP stability | 2026-03-09 |
+| Platform Test Standard | Dev cycle, test harnesses, green gate for all services | Phase 1 ready | Plan approved 2026-03-11 | 2026-03-11 |
 
 ## Open Decisions
 - **Google Places routing:** `platform_v1.places` vs `shogun_v1.places` — canonical
@@ -101,6 +102,32 @@ cron-based Python services. mltrader (ML trading bot) is a planned future projec
   be purpose-built Python services, not n8n workflows.
 - Risk accepted: More custom code to maintain, but full control over behavior
 
+## Development Cycle Standard (Active — 2026-03-11)
+
+The platform has a formally defined 5-stage development cycle. Every build task
+must follow it. Defined in: `outputs/planning/platform-test-standard-plan.md`
+
+**5 Stages:**
+1. Session Startup (platform health, git state, security scan)
+2. Task Onboarding — Part A: infrastructure readiness; Part B: Capability Pre-check
+3. Build (API-first: OpenAPI spec before code)
+4. Post-Deployment Validation (smoke + regression + Loki Level 1)
+5. Delivery Gate (7-item Green Checklist — all must pass)
+
+**Green Checklist (required for every service task):**
+- [ ] 1. All validate script steps PASS (including regression)
+- [ ] 2. Loki Level 1 verified (service= label logs in Loki, last 15 min)
+- [ ] 3. OpenAPI spec committed to services/{name}/openapi.yaml
+- [ ] 4. Service doc capability registry current
+- [ ] 5. _index.md updated
+- [ ] 6. Evidence report in outputs/validation/
+- [ ] 7. .env.example current
+
+**Future gates (tracked, not yet active):**
+- Loki Level 2: Grafana panel per service (triggers after Phase 3 complete)
+- Synthetic monitoring via brainnode-01 cron (triggers after brainnode-01 onboarded)
+- Automated Playwright tests for frontends (triggers after frontend planning session)
+
 ## Backlog
 - **Shogun reboot:** Separate project conversation. FastAPI, Docker, svcnode-01.
   Frontend (mobile-friendly dashboard): weather, blossom tracking, local news,
@@ -126,6 +153,13 @@ cron-based Python services. mltrader (ML trading bot) is a planned future projec
   Tokyo example). Requires memory entity model with geofence metadata. Design
   during Memory MCP vetting session.
 - **Garmin fitness integration:** Low priority, own project. Not in active backlog.
+- **Twitter/X gateway:** Planned 2026-03-10. Full plan written and saved.
+  Uses twscrape library against Twitter's internal mobile GraphQL API.
+  Requires 2–3 dedicated Twitter accounts (free tier, non-personal identity)
+  before Phase 0 can start. Account pool stored in .env. Stricter rate limits
+  than Reddit gateway (20 req/min vs 50). Two open items before execution:
+  (1) account identity process, (2) Shogun seed feed search terms.
+  See: outputs/planning/twitter-gateway-plan.md
 - **mltrader project:** Not started, planning not yet initiated.
 - **brainnode-01 onboarding:** No projects deployed yet. SSH key and git
   permissions needed before any service can be deployed there.
@@ -135,3 +169,5 @@ cron-based Python services. mltrader (ML trading bot) is a planned future projec
 |----------|------|--------|
 | MVP Testing Dashboard Plan | outputs/planning/mvp-dashboard-plan.md | Complete |
 | MCP Infrastructure Plan | outputs/planning/mcp-infrastructure-plan.md | Approved — phased execution |
+| Twitter/X Gateway Plan | outputs/planning/twitter-gateway-plan.md | Backlogged — not started |
+| Platform Test Standard Plan | outputs/planning/platform-test-standard-plan.md | Approved — Phase 1 ready |
