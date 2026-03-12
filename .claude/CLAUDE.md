@@ -278,6 +278,59 @@ Silence is not consent. Ambiguous responses prompt the agent to re-ask once.
 
 ---
 
+## Stage 3 — Delivery Gate (Green Gate Checklist)
+
+Before any service task is considered **complete** and before the Merge Ready
+notice is produced, the agent must verify all applicable items in the Green Gate
+checklist. This is the delivery counterpart to Stage 2 approval — execution is
+not done until delivery is confirmed.
+
+### Green Gate Checklist — 7 Items
+
+For every task that creates or modifies a platform service, verify:
+
+| # | Item | How to Verify |
+|:--|:-----|:--------------|
+| 1 | **All validate steps PASS** | Run `python services/{name}/validate_{name}.py` — all steps green |
+| 2 | **Loki Level 1 verified** | Validate script Step 7 reports live log lines in last 15 min, OR gap is documented |
+| 3 | **OpenAPI spec committed** | `services/{name}/openapi.yaml` exists and is tracked in git |
+| 4 | **Capability registry current** | `.claude/services/{name}.md` `## Capabilities` table reflects current state |
+| 5 | **`_index.md` updated** | `.claude/services/_index.md` entry added or revised |
+| 6 | **Evidence report written** | `outputs/validation/YYYY-MM-DD_{task}_report.md` committed |
+| 7 | **`.env.example` current** | All new env variables are documented in `.env.example` at project root |
+
+### Checklist Exemptions
+
+- **Non-service tasks** (pure docs, planning, tooling changes): Items 1–5 and 7 do not apply.
+  Item 6 (evidence report) is always required.
+- **Existing service — no functional change**: Item 1 is SKIP (validate not re-run unless
+  changed code warrants it). Items 3–7 still apply if any service artifact was touched.
+- **Loki gap (known)**: If a service has no Loki push code, Item 2 is WARN (documented)
+  not FAIL. The gap must appear in the evidence report and the service doc Capabilities table.
+
+### Delivery Gate Output Format
+
+After completing the checklist, produce this summary before the Merge Ready notice:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  ✅  GREEN GATE — Delivery Checklist                           ║
+╠══════════════════════════════════════════════════════════════════╣
+║  1. Validate PASS:       [PASS / SKIP / FAIL — reason]         ║
+║  2. Loki Level 1:        [PASS / WARN — gap documented / SKIP] ║
+║  3. OpenAPI spec:        [committed / SKIP]                    ║
+║  4. Capability registry: [current / SKIP]                      ║
+║  5. _index.md:           [updated / SKIP]                      ║
+║  6. Evidence report:     [written — path]                      ║
+║  7. .env.example:        [current / no new vars / SKIP]        ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+A task with any unresolved FAIL may not proceed to merge. WARN items
+may proceed if documented in the evidence report.
+
+---
+
 ## Scope Discipline During Execution
 
 Once execution begins, the agent operates within the approved plan boundary.
