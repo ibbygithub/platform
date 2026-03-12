@@ -220,8 +220,38 @@ Embed queries via the LLM Gateway: `POST http://platform-llm-gateway:8080/v1/emb
 
 Schema files: `services/scraper/schema.sql` (base), `services/scraper/schema_embeddings.sql` (pgvector migration).
 
+## Capabilities
+
+Capability registry for Stage 2 Part B (Capability Pre-check). Before building
+any feature that depends on the scraper, check this table for the feature you need.
+
+| Capability | Our Endpoint | Status | Last Verified |
+|:-----------|:-------------|:-------|:--------------|
+| Single-page scrape (markdown + HTML) | `POST /v1/scrape` | `implemented` | 2026-03-11 |
+| Multi-page crawl | `POST /v1/crawl` | `implemented` | 2026-03-11 |
+| URL discovery / site map | `POST /v1/map` | `implemented` | 2026-03-11 |
+| LLM structured extraction | `POST /v1/extract` | `degraded` | 2026-03-11 |
+| Screenshot capture | Not exposed | `available-upstream` | 2026-03-11 |
+| PDF content extraction | Not exposed | `available-upstream` | 2026-03-11 |
+| Web search (requires Serper API) | Not exposed | `available-upstream` | 2026-03-11 |
+| Semantic similarity search (stored results) | Via DB query | `implemented` | 2026-03-11 |
+
+**Status definitions:**
+- `implemented` — available in our platform gateway and tested
+- `degraded` — endpoint exists but a dependency is missing (see Known Limitations)
+- `available-upstream` — Firecrawl supports it but our wrapper does not yet expose it
+
+**`/v1/extract` degraded:** Firecrawl requires `OPENAI_API_KEY` in `/opt/firecrawl/.env`
+on svcnode-01. Key is not currently set. A task that needs extract must add this key
+before building. See Known Limitations #4.
+
+**Screenshot / PDF / Search:** Available in Firecrawl via `formats: ["screenshot"]`,
+native PDF URL handling, and `/v1/search` (requires Serper key). None are exposed in
+the platform wrapper. A task that needs these must implement the endpoint in the
+scraper service first — flag as a scope addition in the Stage 2 execution plan.
+
 ## Last Updated
-2026-03-05 — Loki structured logging implemented and validated. Crawl `max_depth`
-behavior documented (requires ≥ 2 for child pages). `/v1/map` sitemap-dependency
-documented. Playwright crash/restart runbook added. Firecrawl path exception filed.
-Auth gap acknowledged (M4 — deferred, internal-only scope).
+2026-03-11 — Platform Test Standard Phase 2 applied. OpenAPI spec added at
+`services/scraper/openapi.yaml`. Capability registry added. validate_firecrawl.py
+updated with shared fixtures, regression step (Step 6), and Loki Level 1 gate
+(Step 7). Green Gate checklist printed at end of validate run.
