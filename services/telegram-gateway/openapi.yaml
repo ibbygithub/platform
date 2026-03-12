@@ -1,0 +1,278 @@
+openapi: 3.1.0
+info:
+  title: Platform Telegram Bot Gateway — Upstream Envelope Schema
+  version: 1.0.0
+  description: |
+    Architecture note: The Telegram gateway is a Telegraf polling bot. It does
+    NOT expose HTTP endpoints that platform services call. Instead, it receives
+    messages from Telegram users and forwards them to UPSTREAM_URL as structured
+    JSON envelopes.
+
+    This spec documents the upstream envelope contract — the JSON payload that
+    the gateway POSTs to UPSTREAM_URL when a Telegram message is received.
+    Downstream services (e.g. Shogun's chat handler) must implement an HTTP
+    endpoint that accepts this schema.
+
+    Auth: The gateway sends no Authorization header. UPSTREAM_URL should be
+    on platform_net and should not be publicly accessible.
+
+    Message types supported:
+      - text       — regular text messages and commands
+      - location   — location share (initial and live updates)
+      - photo      — image with optional caption
+      - document   — file attachment with optional caption
+      - voice      — voice message
+
+paths: {}  # The gateway has no inbound HTTP endpoints
+
+components:
+  schemas:
+
+    TelegramEnvelope:
+      type: object
+      description: |
+        The JSON payload POSTed by the Telegram gateway to UPSTREAM_URL for
+        every received message. UPSTREAM_URL must return a JSON object. If the
+        object contains a "reply_text" key, the gateway sends it as a reply
+        to the Telegram user. Any other response (or empty response) is ignored.
+      required:
+        - receipt_id
+        - received_at
+        - kind
+        - update
+        - from
+        - chat
+        - message
+        - capabilities
+        - payload
+      properties:
+        receipt_id:
+          type: string
+          description: Random hex ID generated per envelope for deduplication / logging.
+          example: "a1b2c3d4e5f6a7b8"
+        received_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the message was received.
+          example: "2026-03-11T18:00:00.000Z"
+        kind:
+          type: string
+          enum: [text, location, photo, document, voice]
+          description: Telegram message type.
+        update:
+          type: object
+          properties:
+            update_id:
+              type: integer
+              nullable: true
+        from:
+          $ref: "#/components/schemas/TelegramUser"
+        chat:
+          $ref: "#/components/schemas/TelegramChat"
+        message:
+          $ref: "#/components/schemas/TelegramMessageMeta"
+        capabilities:
+          $ref: "#/components/schemas/GatewayCapabilities"
+        payload:
+          description: |
+            Kind-specific content. Schema depends on the "kind" field.
+            See TextPayload, LocationPayload, PhotoPayload, DocumentPayload, VoicePayload.
+          oneOf:
+            - $ref: "#/components/schemas/TextPayload"
+            - $ref: "#/components/schemas/LocationPayload"
+            - $ref: "#/components/schemas/PhotoPayload"
+            - $ref: "#/components/schemas/DocumentPayload"
+            - $ref: "#/components/schemas/VoicePayload"
+
+    TelegramUser:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        first_name:
+          type: string
+          nullable: true
+        last_name:
+          type: string
+          nullable: true
+        language_code:
+          type: string
+          nullable: true
+          example: "en"
+
+    TelegramChat:
+      type: object
+      properties:
+        id:
+          type: integer
+          nullable: true
+          description: Telegram chat ID (negative for groups/supergroups)
+        type:
+          type: string
+          nullable: true
+          enum: [private, group, supergroup, channel]
+        title:
+          type: string
+          nullable: true
+          description: Group/channel title. Null for private chats.
+
+    TelegramMessageMeta:
+      type: object
+      properties:
+        message_id:
+          type: integer
+          nullable: true
+        date:
+          type: integer
+          nullable: true
+          description: Unix timestamp of the original message
+        reply_to_message_id:
+          type: integer
+          nullable: true
+          description: message_id this message is replying to, if any
+
+    GatewayCapabilities:
+      type: object
+      description: Capability flags set by the gateway operator via env vars.
+      properties:
+        can_search:
+          type: boolean
+          description: CAP_CAN_SEARCH — whether upstream may perform web searches
+        can_scrape:
+          type: boolean
+          description: CAP_CAN_SCRAPE — whether upstream may scrape URLs
+        can_fetch_files:
+          type: boolean
+          description: CAP_CAN_FETCH_FILES — whether upstream may download file attachments
+
+    TextPayload:
+      type: object
+      description: Payload for kind=text messages
+      properties:
+        text:
+          type: string
+          description: The message text (may include /command prefixes)
+        entities:
+          type: array
+          description: Telegram message entities (bold, links, mentions, etc.)
+          items:
+            type: object
+
+    LocationPayload:
+      type: object
+      description: Payload for kind=location messages (initial share and live updates)
+      properties:
+        location:
+          type: object
+          nullable: true
+          properties:
+            latitude:
+              type: number
+              format: double
+            longitude:
+              type: number
+              format: double
+            horizontal_accuracy:
+              type: number
+              nullable: true
+            live_period:
+              type: integer
+              nullable: true
+              description: Seconds this live location is active (null if not live)
+            heading:
+              type: integer
+              nullable: true
+            proximity_alert_radius:
+              type: integer
+              nullable: true
+
+    PhotoPayload:
+      type: object
+      description: Payload for kind=photo messages
+      properties:
+        caption:
+          type: string
+          description: Optional photo caption
+        photos:
+          type: array
+          description: Array of photo size variants (Telegram sends multiple resolutions)
+          items:
+            type: object
+            properties:
+              file_id:
+                type: string
+              file_unique_id:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              file_size:
+                type: integer
+                nullable: true
+
+    DocumentPayload:
+      type: object
+      description: Payload for kind=document messages (file attachments)
+      properties:
+        caption:
+          type: string
+        document:
+          type: object
+          nullable: true
+          properties:
+            file_id:
+              type: string
+            file_unique_id:
+              type: string
+            file_name:
+              type: string
+              nullable: true
+            mime_type:
+              type: string
+              nullable: true
+            file_size:
+              type: integer
+              nullable: true
+
+    VoicePayload:
+      type: object
+      description: Payload for kind=voice messages
+      properties:
+        voice:
+          type: object
+          nullable: true
+          properties:
+            file_id:
+              type: string
+            file_unique_id:
+              type: string
+            duration:
+              type: integer
+              description: Voice message duration in seconds
+            mime_type:
+              type: string
+              nullable: true
+            file_size:
+              type: integer
+              nullable: true
+
+    UpstreamResponse:
+      type: object
+      description: |
+        Expected response from UPSTREAM_URL. The gateway only acts on reply_text.
+        All other keys are ignored. Return an empty object {} or omit reply_text
+        to suppress any bot reply.
+      properties:
+        reply_text:
+          type: string
+          nullable: true
+          description: |
+            If present and non-null, the gateway sends this text back to the
+            Telegram chat as a reply. Truncated to 3500 characters. The bot
+            must have permission to send messages in the target chat.
+          example: "Your request has been received. Receipt: a1b2c3d4e5f6a7b8"
