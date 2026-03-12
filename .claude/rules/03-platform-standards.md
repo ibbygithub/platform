@@ -27,13 +27,37 @@ service before building it inline.
 ## Service Documentation — Mandatory Deployment Artifact
 
 Every deployment task that creates or modifies a service on `svcnode-01` must
-produce or update a service doc in `.claude/services/` before the task is
-considered complete.
+produce or update the following artifacts before the task is considered complete:
 
-Use `templates/service-doc-template.md` as the base.
-Update `_index.md` to reflect any new or changed service.
+| Artifact | Location | Required |
+|:---------|:---------|:---------|
+| Service doc | `.claude/services/{name}.md` | Always |
+| OpenAPI spec | `services/{name}/openapi.yaml` | Always |
+| Validate script | `services/{name}/validate_{name}.py` | Always |
+| `_index.md` entry | `.claude/services/_index.md` | Always |
+| `.env.example` update | `.env.example` (project root) | If new env vars added |
 
-A deployment without a service doc update is an incomplete task.
+Use `templates/service-doc-template.md` as the base for new service docs.
+The template includes a `## Capabilities` section — this must be populated
+before the task is marked complete. Do not leave it empty or as placeholder text.
+
+**Validate script requirements:**
+- Follows the 7-step structure (environment, health, functional tests, Loki check, report)
+- Imports shared fixtures from `tools/test-harness/fixtures/`
+- Uses the `check_loki_service_logs` helper from `platform_preflight.py` for Loki Level 1
+- Prints a Green Gate checklist summary at exit
+- See `services/scraper/validate_scraper.py` as the reference implementation
+
+**OpenAPI spec requirements:**
+- OpenAPI 3.1.0 format
+- Includes all exposed HTTP endpoints with request/response schemas
+- Documents both FQDN and internal Docker network server entries
+- For receive-only services (e.g., Telegram gateway): documents the upstream
+  envelope schema instead of HTTP paths
+- See `services/scraper/openapi.yaml` or `services/reddit-gateway/openapi.yaml` as reference
+
+A deployment without all required artifacts is an incomplete task.
+The Green Gate checklist in `CLAUDE.md` Stage 3 governs final verification.
 
 ---
 
