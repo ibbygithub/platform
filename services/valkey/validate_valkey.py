@@ -159,6 +159,44 @@ def check_set_get(client) -> CheckResult:
         return CheckResult("SET / GET round-trip", "FAIL", str(e))
 
 
+# ── Steps 4–5 fallback — valkey-cli via docker exec (no redis-py required) ────
+def _cli(cmd: list[str]) -> tuple[int, str]:
+    result = subprocess.run(
+        ["docker", "exec", CONTAINER_NAME, "valkey-cli", "-a", VALKEY_PASSWORD] + cmd,
+        capture_output=True, text=True, timeout=TIMEOUT,
+    )
+    return result.returncode, (result.stdout + result.stderr).strip()
+
+
+def _check_ping_cli() -> CheckResult:
+    t0 = time.monotonic()
+    try:
+        rc, out = _cli(["PING"])
+        latency = time.monotonic() - t0
+        if "PONG" in out:
+            return CheckResult("PING", "PASS", "PONG received (via valkey-cli)", latency)
+        return CheckResult("PING", "FAIL", f"Unexpected: {out}")
+    except Exception as e:
+        return CheckResult("PING", "FAIL", str(e))
+
+
+def _check_set_get_cli() -> CheckResult:
+    t0 = time.monotonic()
+    test_key = "platform:validate:probe"
+    test_val = "ok"
+    try:
+        _cli(["SET", test_key, test_val, "EX", "30"])
+        rc, out = _cli(["GET", test_key])
+        latency = time.monotonic() - t0
+        _cli(["DEL", test_key])
+        if test_val in out:
+            return CheckResult("SET / GET round-trip", "PASS",
+                               "write and read verified (via valkey-cli)", latency)
+        return CheckResult("SET / GET round-trip", "FAIL", f"Expected '{test_val}', got '{out}'")
+    except Exception as e:
+        return CheckResult("SET / GET round-trip", "FAIL", str(e))
+
+
 # ── Step 6 — Loki ─────────────────────────────────────────────────────────────
 def check_loki() -> CheckResult:
     # Valkey emits logs to Docker stdout only — no Loki label.
@@ -229,6 +267,7 @@ def main() -> None:
         return
 
     # Steps 4–5 — Redis protocol checks
+    # Prefer redis-py; fall back to docker exec valkey-cli if package unavailable
     try:
         import redis as redis_lib
         client = redis_lib.Redis(
@@ -241,10 +280,8 @@ def main() -> None:
         results.append(check_ping(client))
         results.append(check_set_get(client))
     except ImportError:
-        results.append(CheckResult("PING", "FAIL",
-                                   "redis package not installed — run: pip install redis"))
-        results.append(CheckResult("SET / GET round-trip", "SKIP",
-                                   "redis package missing"))
+        results.append(_check_ping_cli())
+        results.append(_check_set_get_cli())
 
     # Step 6 — Logs
     results.append(check_loki())
