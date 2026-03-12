@@ -6,7 +6,7 @@
 |:---|:---|
 | **Database** | `shogun_v1` |
 | **Owner** | `postgres` |
-| **Primary User** | `mcp_shogun`, `places_app` |
+| **Primary User** | `mcp_shogun` |
 | **Purpose** | Project Shogun — trips, surveys, embeddings, places |
 | **Size** | 9.3 MB (largest active database) |
 | **Extensions** | vector 0.8.1, pg_stat_statements 1.11, pgcrypto 1.3 — installed for PII/auth column protection; no columns currently encrypted; encryption implementation requires an approved task plan |
@@ -51,21 +51,6 @@ Purpose: Core Project Shogun application tables.
 | `survey_votes` | `postgres` | 24 kB | 0 | Survey responses |
 | `dev_logs` | `postgres` | 16 kB | 0 | Development logging |
 
-### `places` schema
-Owner: `postgres`
-Purpose: Google Places data for Project Shogun.
-App user: `places_app`
-
-| Table | Owner | Size | Rows | Purpose |
-|:---|:---|:---|:---|:---|
-| `google_places` | `postgres` | 256 kB | 20 | Cached place records |
-| `google_place_snapshots` | `postgres` | 176 kB | 60 | Point-in-time snapshots |
-| `neighborhood_anchors` | `places_app` | 24 kB | 0 | Neighborhood reference points — owner: places_app (not postgres — intentional; places_app manages this table directly) |
-
-**Agent note:** This schema has live data — 20 places and 60 snapshots.
-This is the active places data source for Project Shogun.
-The equivalent tables in `platform_v1.places` are empty.
-
 ---
 
 ## Key Observations for Agents
@@ -108,6 +93,6 @@ ORDER BY started_at DESC;
 ## Anti-Patterns — Do Not Do These
 
 - ❌ Do not write scraper/platform results here — use `platform_v1`
-- ❌ Do not confuse `shogun_v1.places` (live data) with `platform_v1.places` (empty)
+- ❌ Do not write Google Places data here — use `platform_v1.places` (canonical, 2026-03-12)
 - ❌ Do not drop any table — all 20 tables are part of the Shogun schema
 - ❌ Do not use this database for sandbox testing — use `automation_sandbox_test`
