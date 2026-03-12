@@ -1,0 +1,28 @@
+networks:
+  platform_net:
+    external: true
+    name: platform_net
+
+volumes:
+  valkey-data:
+    name: platform-valkey-data
+
+services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: platform-valkey
+    restart: unless-stopped
+
+    # requirepass — auth required for all connections
+    # appendonly yes — AOF persistence (survives restarts)
+    command: valkey-server --requirepass ${VALKEY_PASSWORD} --appendonly yes
+
+    ports:
+      - "6379:6379"   # Published to host — allows brainnode-01 and other nodes to connect
+                      # via valkey.platform.ibbytech.com:6379
+
+    volumes:
+      - valkey-data:/data
+
+    networks:
+      - platform_net
