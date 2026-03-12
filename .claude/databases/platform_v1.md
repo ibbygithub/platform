@@ -41,16 +41,18 @@ Do not use `shogun_v1.public` for scraper data — that is a separate project da
 
 ### `places` schema
 Owner: `dba-agent`
-Purpose: Google Places data cache for platform services.
+Purpose: Canonical Google Places data for all platform services and projects.
 App user: `places_app`
 
-| Table | Owner | Size | Rows | Purpose |
-|:---|:---|:---|:---|:---|
-| `google_place_snapshots` | `dba-agent` | 32 kB | 0 | Point-in-time place snapshots |
-| `google_places` | `dba-agent` | 40 kB | 0 | Cached place records |
+| Table | Owner | Purpose |
+|:---|:---|:---|
+| `google_places` | `dba-agent` | Cached place records with ratings, hours, contact info |
+| `google_place_snapshots` | `dba-agent` | Point-in-time place snapshots (audit trail) |
+| `neighborhood_anchors` | `dba-agent` | Geocoded anchor points for neighborhood-based searches |
 
-**Agent note:** These tables are empty — data collection not yet started.
-The equivalent tables in `shogun_v1.places` have live data (20 places, 60 snapshots).
+**Agent note:** This is the canonical places schema — all services and projects (including Shogun)
+use this. `shogun_v1.places` has been dropped (2026-03-12). Shogun accesses place data via
+the Google Places REST gateway, not direct DB writes.
 
 ### `public` schema
 Owner: `pg_database_owner`

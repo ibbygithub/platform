@@ -22,8 +22,8 @@ cron-based Python services. mltrader (ML trading bot) is a planned future projec
 | Platform Test Standard | Dev cycle, test harnesses, green gate for all services | All 4 phases complete | Complete 2026-03-11 | 2026-03-11 |
 
 ## Open Decisions
-- **Google Places routing:** `platform_v1.places` vs `shogun_v1.places` — canonical
-  dataset ownership unresolved. Must be decided before Shogun build begins.
+- **Google Places routing:** RESOLVED 2026-03-12 — `platform_v1.places` is canonical.
+  `shogun_v1.places` dropped. Shogun reads via REST gateway, not direct DB.
 - **Memory MCP technology choice:** Mem0 vs. @modelcontextprotocol/server-memory +
   custom vs. bespoke FastAPI service. Requires vetting session before Env 2 Phase 1.
 - **Option C (LLM gateway tool orchestration):** Design deferred to OpenRouter

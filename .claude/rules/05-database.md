@@ -83,22 +83,18 @@ Before writing any SQL or schema change, answer this question:
 | If the task involves... | Use this database |
 |:---|:---|
 | Scraper service, crawl results, web data | `platform_v1` → `scraper` schema |
-| Google Places data for platform gateway services | `platform_v1` → `places` schema |
-| Project Shogun features, trips, users | `shogun_v1` → `public` or `places` schema |
-| Google Places data for Shogun application | `shogun_v1` → `places` schema |
+| Google Places data — any service or project | `platform_v1` → `places` schema |
+| Project Shogun features, trips, users | `shogun_v1` → `public` schema |
 | ML trading models or signals | `mltrader` → `mltrader` schema |
 | n8n workflow state | `n8n` → `n8n` schema |
 | Experimental or throwaway work | `automation_sandbox_test` |
 
 **If uncertain — stop and ask. Do not guess.**
 
-> **KNOWN ISSUE — Google Places routing:** Google Places gateway and Shogun application
-> data are currently entangled in the same service deployment. An agent receiving a generic
-> "store Google Places data" task must clarify with the human whether the target is the
-> platform gateway (`platform_v1.places` schema) or the Shogun application dataset
-> (`shogun_v1.places` schema) before executing any write operation. Do not assume routing
-> from task description alone. Full decoupling is tracked as a separate Project Shogun
-> architecture task.
+> **RESOLVED (2026-03-12) — Google Places routing:** `platform_v1.places` is the canonical
+> Google Places schema for all services and projects. `shogun_v1.places` has been dropped.
+> Shogun reads place data via the Google Places REST gateway, not direct DB access.
+> Tables: `google_places`, `google_place_snapshots`, `neighborhood_anchors`. App user: `places_app`.
 
 ---
 
