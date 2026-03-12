@@ -224,6 +224,33 @@ intervals. On Reddit 429 responses, backs off 30 seconds and retries once.
 
 ---
 
+## Capabilities
+
+Capability registry for Stage 2 Part B (Capability Pre-check). Before building
+any feature that depends on the Reddit gateway, check this table.
+
+| Capability | Our Endpoint | Status | Last Verified |
+|:-----------|:-------------|:-------|:--------------|
+| Keyword search (English) | `POST /v1/reddit/search` | `implemented` | 2026-03-11 |
+| Keyword search (Unicode/kanji) | `POST /v1/reddit/search` | `implemented` | 2026-03-11 |
+| Subreddit browse (hot/new/top/rising) | `POST /v1/reddit/subreddit/posts` | `implemented` | 2026-03-11 |
+| Fetch post + comments | `GET /v1/reddit/post/{id}` | `implemented` | 2026-03-11 |
+| Subreddit metadata | `GET /v1/reddit/subreddit/{name}/info` | `implemented` | 2026-03-11 |
+| Semantic search (stored posts, pgvector) | `POST /v1/reddit/saved/search` | `implemented` | 2026-03-11 |
+| Scheduled feed management | `POST/GET/DELETE /v1/reddit/feeds` | `implemented` | 2026-03-11 |
+| Post voting / commenting / submission | Not exposed | `not-available` | 2026-03-11 |
+| OAuth-scoped user actions | Not exposed | `not-available` | 2026-03-11 |
+
+**Status definitions:**
+- `implemented` — available and tested in the platform gateway
+- `not-available` — not exposed; read-only by design (no OAuth credentials)
+
+**Last Updated:** 2026-03-11 — Platform Test Standard Phase 3 applied. OpenAPI spec
+added at `services/reddit-gateway/openapi.yaml`. Validate script added at
+`services/reddit-gateway/validate_reddit.py`.
+
+---
+
 ## Known limitations
 
 - `r/japan` and `r/japanlife` are primarily English-language communities — kanji
