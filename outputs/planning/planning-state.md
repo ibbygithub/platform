@@ -17,7 +17,7 @@ cron-based Python services. mltrader (ML trading bot) is a planned future projec
 | LLM gateway | LLM completion service on svcnode-01 | Production | Complete | 2026-03-01 |
 | Reddit gateway | Credential-free v2, deployed, tested | Production | Complete | 2026-03-08 |
 | MVP Testing Dashboard | localhost:8000 platform test harness | Production | Complete | 2026-03-08 |
-| MCP Infrastructure — Env 1 | Playwright, GitHub, PostgreSQL, Memory MCP on laptop | Phase 1 ready | Plan approved — awaiting execution | 2026-03-09 |
+| MCP Infrastructure — Env 1 | Playwright, GitHub, PostgreSQL, Memory MCP on laptop | Complete | All 4 Tier 1 servers connected 2026-03-11 | 2026-03-11 |
 | MCP Infrastructure — Env 2 | Platform MCP servers on svcnode-01 | Phase 1 deferred | Awaiting Shogun MVP stability | 2026-03-09 |
 | Platform Test Standard | Dev cycle, test harnesses, green gate for all services | All 4 phases complete | Complete 2026-03-11 | 2026-03-11 |
 
