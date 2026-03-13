@@ -1,0 +1,33 @@
+networks:
+  platform_net:
+    external: true
+    name: platform_net
+
+services:
+  tavily:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: platform-tavily
+    container_name: platform-tavily
+    restart: unless-stopped
+
+    env_file:
+      - ./.env
+
+    networks:
+      - platform_net
+
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=platform_net
+
+      - traefik.http.routers.tavily-http.entrypoints=web
+      - traefik.http.routers.tavily-http.rule=Host(`tavily.platform.ibbytech.com`)
+      - traefik.http.routers.tavily-http.service=tavily
+      - traefik.http.services.tavily.loadbalancer.server.port=8084
+
+      - traefik.http.routers.tavily-https.entrypoints=websecure
+      - traefik.http.routers.tavily-https.rule=Host(`tavily.platform.ibbytech.com`)
+      - traefik.http.routers.tavily-https.service=tavily
+      - traefik.http.routers.tavily-https.tls=true
