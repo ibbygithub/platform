@@ -62,6 +62,27 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class MultimodalRequest(BaseModel):
+    """
+    Single-turn multimodal request (Google Gemini only).
+    Used by shogun-core for voice transcription and photo analysis.
+    """
+    model:             Optional[str]  = None
+    prompt:            str                        # Text instruction
+    file_data:         str                        # Base64-encoded file bytes
+    mime_type:         str                        # e.g. audio/ogg, image/jpeg
+    system_prompt:     Optional[str]  = None
+    temperature:       Optional[float] = 0.1
+    max_output_tokens: Optional[int]   = 2000
+
+
+class MultimodalResponse(BaseModel):
+    provider:    str
+    model:       str
+    output_text: str
+    usage:       Dict[str, Any]
+
+
 class ChatRequest(BaseModel):
     provider:          Optional[Provider]        = None
     model:             Optional[str]             = None
@@ -243,3 +264,47 @@ def chat(req: ChatRequest) -> ChatResponse:
         return ChatResponse(provider="anthropic", model=model, output_text=text, usage=usage)
 
     raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
+
+@app.post("/v1/multimodal", response_model=MultimodalResponse)
+def multimodal(req: MultimodalRequest) -> MultimodalResponse:
+    """
+    Single-turn multimodal completion via Google Gemini.
+    Accepts a base64-encoded file (audio or image) plus a text prompt.
+    Returns output_text — the model's response to the prompt about the file.
+
+    Use cases:
+      - Voice transcription: mime_type=audio/ogg, prompt="Transcribe this voice message."
+      - Photo analysis: mime_type=image/jpeg, prompt="Describe what you see in this image."
+    """
+    _require_key("google")
+    model = req.model or DEFAULT_CHAT_MODEL
+    if not model.startswith("models/"):
+        model = f"models/{model}"
+
+    parts: List[Dict[str, Any]] = [
+        {"inline_data": {"mime_type": req.mime_type, "data": req.file_data}},
+        {"text": req.prompt},
+    ]
+    payload: Dict[str, Any] = {
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": {
+            "temperature":     float(req.temperature or 0.1),
+            "maxOutputTokens": int(req.max_output_tokens or 2000),
+        },
+    }
+    if req.system_prompt:
+        payload["systemInstruction"] = {"parts": [{"text": req.system_prompt}]}
+
+    url = f"{GOOGLE_BASE_URL}/v1beta/{model}:generateContent?key={GOOGLE_API_KEY}"
+    r = requests.post(url, json=payload, timeout=120)
+    if r.status_code >= 400:
+        raise HTTPException(status_code=502, detail={"provider": "google", "status": r.status_code, "body": r.text})
+
+    raw        = r.json()
+    candidates = raw.get("candidates", [])
+    parts_out  = (((candidates[0].get("content") or {}).get("parts")) or []) if candidates else []
+    text       = parts_out[0].get("text", "") if parts_out else ""
+    usage      = raw.get("usageMetadata", {}) or {}
+
+    return MultimodalResponse(provider="google", model=model, output_text=text.strip(), usage=usage)
