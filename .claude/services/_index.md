@@ -18,6 +18,7 @@ unless otherwise noted.
 | Scraper | `scrape.platform.ibbytech.com` | Web scraping, crawling, URL mapping, LLM extraction; auto-persists + embeds to Postgres (pgvector). Depends on Firecrawl via host port 3002 (not platform_net) — see `/opt/firecrawl` | [scraper.md](scraper.md) |
 | Reddit Gateway | `reddit.platform.ibbytech.com` | Read Reddit posts/comments via public JSON API (no credentials). Unicode/kanji search. Persists to platform_v1.reddit with pgvector embeddings. Scheduled feeds. | [reddit-gateway.md](reddit-gateway.md) |
 | Valkey | `valkey.platform.ibbytech.com:6379` | Shared in-memory key/value store (Redis-protocol). Session state, conversation context, caching. TCP service — not HTTP. Auth required. | [valkey.md](valkey.md) |
+| Tavily | `tavily.platform.ibbytech.com` | AI-native web search — kanji + English queries, domain-restricted search (e.g. tabelog.com). TAVILY_API_KEY held server-side. | [tavily.md](tavily.md) |
 | Loki | Internal — `192.168.71.220:3100` | Centralized log aggregation — NODE_ONLY: deployed at `/opt/logstack/`, not tracked in platform git repo | [loki.md](loki.md) |
 | Grafana | Internal — `192.168.71.220:3000` | Observability dashboards — NODE_ONLY: deployed at `/opt/logstack/`, not tracked in platform git repo | [grafana.md](grafana.md) |
 

@@ -1,0 +1,240 @@
+openapi: "3.1.0"
+
+info:
+  title: Platform Tavily Gateway
+  version: "1.0.0"
+  description: |
+    AI-native web search gateway via Tavily. Supports kanji + English queries
+    and domain-restricted searches.
+
+    Primary consumer: shogun-core on brainnode-01.
+
+    Key use cases:
+    - General Japan travel search (restaurants, POIs, transit, local info)
+    - Kanji queries — Tavily handles Japanese natively
+    - Tabelog domain-restricted search (include_domains: ["tabelog.com"])
+    - RAG pipeline: Tavily → Firecrawl → pgvector → LLM Gateway
+
+servers:
+  - url: https://tavily.platform.ibbytech.com
+    description: FQDN via Traefik (HTTPS)
+  - url: http://tavily.platform.ibbytech.com
+    description: FQDN via Traefik (HTTP)
+  - url: http://platform-tavily:8084
+    description: Docker internal network (platform_net)
+  - url: http://127.0.0.1:8084
+    description: Localhost on svcnode-01
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: >
+        Verifies TAVILY_API_KEY is configured and probes Tavily with a minimal
+        search to confirm the key is valid and the upstream is reachable.
+      operationId: health
+      responses:
+        "200":
+          description: Gateway health status (check ok field — always returns HTTP 200)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                healthy:
+                  summary: Key configured, Tavily reachable
+                  value:
+                    ok: true
+                    time: 1741737600
+                    tavily_key_set: true
+                    tavily_status: 200
+                no_key:
+                  summary: API key not configured
+                  value:
+                    ok: false
+                    time: 1741737600
+                    tavily_key_set: false
+                    error: "TAVILY_API_KEY not configured"
+
+  /v1/search:
+    post:
+      summary: Web search via Tavily
+      description: |
+        Submits a search query to Tavily. Supports kanji + English queries.
+
+        **search_depth:**
+        - `basic` — fast (~1–2s), good for most queries
+        - `advanced` — deeper crawl, higher quality but slower (~5–10s)
+
+        **Domain restriction:**
+        Use `include_domains: ["tabelog.com"]` to restrict to restaurant results.
+        Note: domain restriction is best-effort — Tavily may return off-domain
+        results if coverage is thin.
+      operationId: search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+            examples:
+              english_query:
+                summary: English travel search
+                value:
+                  query: "Tokyo vintage camera shops"
+                  max_results: 5
+              kanji_query:
+                summary: Kanji restaurant search
+                value:
+                  query: "東京 おすすめ ラーメン"
+                  max_results: 5
+              tabelog_restricted:
+                summary: Domain-restricted Tabelog search
+                value:
+                  query: "大阪 ランチ おすすめ"
+                  max_results: 5
+                  include_domains:
+                    - tabelog.com
+              advanced_search:
+                summary: Deep search with AI summary
+                value:
+                  query: "Nara deer park best time to visit March cherry blossom"
+                  search_depth: advanced
+                  max_results: 8
+                  include_answer: true
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "503":
+          description: TAVILY_API_KEY not configured in container
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Tavily upstream error (bad key or API failure)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal gateway error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Search query. Supports kanji + English.
+          example: "東京 おすすめ ラーメン"
+        search_depth:
+          type: string
+          enum: [basic, advanced]
+          default: basic
+          description: "basic = fast (~1-2s). advanced = deeper, slower (~5-10s)."
+        max_results:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+        include_domains:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Restrict results to these domains (e.g. ["tabelog.com"])
+          example: ["tabelog.com"]
+        exclude_domains:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Exclude results from these domains
+        include_answer:
+          type: boolean
+          default: false
+          description: Include Tavily AI-generated summary of results
+        include_raw_content:
+          type: boolean
+          default: false
+          description: Include full page text in each result (large response)
+        include_images:
+          type: boolean
+          default: false
+          description: Include image URLs in results
+
+    SearchResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        query:
+          type: string
+          example: "東京 おすすめ ラーメン"
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        answer:
+          type: string
+          nullable: true
+          description: Tavily AI summary (only present when include_answer=true)
+        response_time:
+          type: number
+          nullable: true
+          description: Tavily upstream response time in seconds
+
+    SearchResult:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        content:
+          type: string
+          description: Page excerpt or summary
+        score:
+          type: number
+          description: Relevance score (0–1)
+
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        time:
+          type: integer
+          description: Unix timestamp
+        tavily_key_set:
+          type: boolean
+        tavily_status:
+          oneOf:
+            - type: integer
+            - type: string
+          description: HTTP status from Tavily probe, or error string
+        error:
+          type: string
+          description: Present only when ok=false
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: object
