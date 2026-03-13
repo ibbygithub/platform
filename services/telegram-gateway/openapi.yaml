@@ -1,32 +1,166 @@
 openapi: 3.1.0
 info:
-  title: Platform Telegram Bot Gateway — Upstream Envelope Schema
-  version: 1.0.0
+  title: Platform Telegram Bot Gateway
+  version: 2.0.0
   description: |
-    Architecture note: The Telegram gateway is a Telegraf polling bot. It does
-    NOT expose HTTP endpoints that platform services call. Instead, it receives
-    messages from Telegram users and forwards them to UPSTREAM_URL as structured
-    JSON envelopes.
+    The Telegram gateway has two roles:
 
-    This spec documents the upstream envelope contract — the JSON payload that
-    the gateway POSTs to UPSTREAM_URL when a Telegram message is received.
-    Downstream services (e.g. Shogun's chat handler) must implement an HTTP
-    endpoint that accepts this schema.
+    1. INBOUND (polling bot): Receives messages from Telegram users and forwards
+       them to UPSTREAM_URL as structured JSON envelopes. UPSTREAM_URL must return
+       a JSON object; if it contains a "reply_text" key the gateway sends it as a
+       reply to the Telegram user.
 
-    Auth: The gateway sends no Authorization header. UPSTREAM_URL should be
-    on platform_net and should not be publicly accessible.
+    2. OUTBOUND (send API): HTTP server on SEND_API_PORT (default 3000). Exposes
+       GET /health and POST /send so that platform services (e.g. shogun-core) can
+       push proactive messages to any allowed Telegram chat without waiting for user
+       input. Auth: X-Send-Secret header (set SEND_SECRET env var).
 
-    Message types supported:
+    Servers: telegram.platform.ibbytech.com (Traefik → port 3000 inside container)
+    Internal: http://platform-telegram-gateway:3000 (platform_net)
+    Localhost: http://127.0.0.1:3000 (host-port binding for validation)
+
+    Message types (inbound envelope kinds):
       - text       — regular text messages and commands
       - location   — location share (initial and live updates)
       - photo      — image with optional caption
       - document   — file attachment with optional caption
       - voice      — voice message
 
-paths: {}  # The gateway has no inbound HTTP endpoints
+servers:
+  - url: https://telegram.platform.ibbytech.com
+    description: FQDN via Traefik (HTTPS)
+  - url: http://telegram.platform.ibbytech.com
+    description: FQDN via Traefik (HTTP)
+  - url: http://platform-telegram-gateway:3000
+    description: Docker internal (platform_net)
+  - url: http://127.0.0.1:3000
+    description: Localhost (host-port binding)
+
+paths:
+
+  /health:
+    get:
+      summary: Liveness check
+      description: Returns gateway mode and process uptime. No auth required.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Gateway is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  mode:
+                    type: string
+                    enum: [polling, webhook]
+                    example: polling
+                  uptime:
+                    type: number
+                    description: Process uptime in seconds
+                    example: 3600.4
+
+  /send:
+    post:
+      summary: Send a message to a Telegram chat
+      description: |
+        Push a message to any allowed Telegram chat. Used by shogun-core for
+        proactive messages: morning briefings, location-triggered alerts, etc.
+
+        Auth: If SEND_SECRET env var is set, callers must include header
+        X-Send-Secret: <value>. Returns 401 if missing or wrong.
+      operationId: postSend
+      security:
+        - SendSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendRequest"
+      responses:
+        "200":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendSuccess"
+        "400":
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid or missing X-Send-Secret header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Telegram API error or internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
+  securitySchemes:
+    SendSecret:
+      type: apiKey
+      in: header
+      name: X-Send-Secret
+      description: |
+        Shared secret for POST /send. Set SEND_SECRET env var on the gateway.
+        Callers (e.g. shogun-core) must send X-Send-Secret: <value>.
+        If SEND_SECRET is empty, auth is disabled (dev only).
+
   schemas:
+
+    SendRequest:
+      type: object
+      required:
+        - chat_id
+        - text
+      properties:
+        chat_id:
+          type: string
+          description: Telegram chat ID (numeric string, negative for groups)
+          example: "123456789"
+        text:
+          type: string
+          description: Message text. Truncated to 3500 characters.
+          example: "Good morning! Here is your Japan briefing for today."
+        parse_mode:
+          type: string
+          enum: [Markdown, MarkdownV2, HTML]
+          nullable: true
+          description: Optional Telegram parse mode for formatting.
+          example: Markdown
+
+    SendSuccess:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        message_id:
+          type: integer
+          description: Telegram message_id of the sent message
+          example: 99
+
+    ErrorResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "chat_id and text are required"
 
     TelegramEnvelope:
       type: object
