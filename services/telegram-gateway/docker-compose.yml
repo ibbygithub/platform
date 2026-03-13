@@ -9,11 +9,15 @@ services:
       context: .
       dockerfile: Dockerfile
     image: platform-telegram-gateway
+    pull_policy: never
     container_name: platform-telegram-gateway
     restart: unless-stopped
 
     env_file:
       - ./.env
+
+    ports:
+      - "127.0.0.1:3000:3000"
 
     networks:
       - platform_net
@@ -22,7 +26,9 @@ services:
       - traefik.enable=true
       - traefik.docker.network=platform_net
 
-      # Health / status endpoint (polling mode — no inbound webhook needed)
+      # Outbound send API + health endpoint on port 3000.
+      # Traefik routes telegram.platform.ibbytech.com → /health and /send.
+      # In polling mode the bot also runs on this same port (no webhook path needed).
       - traefik.http.routers.telegram-http.entrypoints=web
       - traefik.http.routers.telegram-http.rule=Host(`telegram.platform.ibbytech.com`)
       - traefik.http.routers.telegram-http.service=telegram
@@ -32,7 +38,3 @@ services:
       - traefik.http.routers.telegram-https.rule=Host(`telegram.platform.ibbytech.com`)
       - traefik.http.routers.telegram-https.service=telegram
       - traefik.http.routers.telegram-https.tls=true
-
-      # NOTE: Port 3000 is only used when TELEGRAM_MODE=webhook.
-      # In polling mode the container has no inbound HTTP — Traefik routing
-      # is a no-op unless you flip to webhook mode later.

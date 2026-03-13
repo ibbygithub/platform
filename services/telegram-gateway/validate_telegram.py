@@ -43,6 +43,7 @@ Usage
 """
 
 import importlib.util
+import socket
 import json
 import os
 import pathlib
@@ -77,9 +78,11 @@ if _FIXTURES_PATH.exists():
         _FIXTURES = json.load(_f)
 
 # ── Config ───────────────────────────────────────────────────────────────────
-BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-TEST_CHAT_ID = os.environ.get("TEST_CHAT_ID", "").strip()
-LOKI_URL     = os.environ.get("LOKI_URL", "http://192.168.71.220:3100")
+BOT_TOKEN       = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TEST_CHAT_ID    = os.environ.get("TEST_CHAT_ID", "").strip()
+LOKI_URL        = os.environ.get("LOKI_URL", "http://192.168.71.220:3100")
+SEND_API_URL    = os.environ.get("SEND_API_URL", "http://127.0.0.1:3000")
+SEND_SECRET     = os.environ.get("SEND_SECRET", "").strip()
 
 TELEGRAM_API = "https://api.telegram.org"
 
@@ -131,8 +134,9 @@ def step0_environment() -> None:
         sys.exit(1)
 
     _info("Architecture note: The Telegram gateway is a polling bot.")
-    _info("  It has no HTTP health endpoint — validation uses the Telegram Bot API directly.")
-    _info("  The gateway's UPSTREAM_URL receives JSON envelopes; see openapi.yaml for schema.")
+    _info("  It also exposes an outbound send API on SEND_API_PORT (default 3000).")
+    _info(f"  SEND_API_URL = {SEND_API_URL}")
+    _info(f"  SEND_SECRET  = {'*** (set)' if SEND_SECRET else '(not set — auth disabled)'}")
 
 
 # ── Step 1 — getMe (Token Validation) ────────────────────────────────────────
@@ -210,6 +214,48 @@ def step2_webhook_info() -> None:
     except Exception as exc:
         _fail(f"getWebhookInfo failed: {exc}")
         _results["step2"] = {"pass": False, "error": str(exc)}
+
+
+# ── Step 2b — Send API Health Check ──────────────────────────────────────────
+
+def step2b_send_api_health() -> None:
+    _hdr("Step 2b — Send API: GET /health")
+    _info(f"GET {SEND_API_URL}/health")
+
+    # TCP reachability first
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(SEND_API_URL)
+        host   = parsed.hostname or "127.0.0.1"
+        port   = parsed.port or 3000
+        t0     = time.time()
+        sock   = socket.create_connection((host, port), timeout=5)
+        sock.close()
+        tcp_ms = (time.time() - t0) * 1000
+        _ok(f"TCP {host}:{port} reachable ({tcp_ms:.0f}ms)")
+    except Exception as exc:
+        _fail(f"TCP {host}:{port} — connection refused: {exc}")
+        _warn("Container may not be running or SEND_API_PORT not bound to host.")
+        _results["step2b"] = {"pass": False, "error": f"TCP failed: {exc}"}
+        return
+
+    try:
+        t0   = time.time()
+        r    = requests.get(f"{SEND_API_URL}/health", timeout=10)
+        ms   = (time.time() - t0) * 1000
+        r.raise_for_status()
+        data = r.json()
+
+        if data.get("ok"):
+            _ok(f"Health OK — mode={data.get('mode')}, uptime={data.get('uptime', 0):.0f}s ({ms:.0f}ms)")
+            _results["step2b"] = {"pass": True, "mode": data.get("mode"), "uptime": data.get("uptime")}
+        else:
+            _fail(f"Health returned ok=false: {data}")
+            _results["step2b"] = {"pass": False, "error": str(data)}
+
+    except Exception as exc:
+        _fail(f"GET /health failed: {exc}")
+        _results["step2b"] = {"pass": False, "error": str(exc)}
 
 
 # ── Step 3 — Loki Level 1 ────────────────────────────────────────────────────
@@ -301,10 +347,11 @@ def _print_final_report() -> None:
     _hdr("Step 5 — Final Validation Report")
 
     STEP_LABELS = {
-        "step1": "getMe — bot token valid",
-        "step2": "getWebhookInfo — mode confirmed",
-        "step3": "Loki Level 1 observability",
-        "step4": "Send test (optional)",
+        "step1":  "getMe — bot token valid",
+        "step2":  "getWebhookInfo — mode confirmed",
+        "step2b": "Send API GET /health",
+        "step3":  "Loki Level 1 observability",
+        "step4":  "Send test (optional)",
     }
 
     print()
@@ -362,13 +409,14 @@ def main():
     step0_environment()
     step1_get_me()
     step2_webhook_info()
+    step2b_send_api_health()
     step3_loki()
     step4_send_test()
     _print_final_report()
 
     all_auto = all(
         _results.get(k, {}).get("pass", False)
-        for k in ["step1", "step2"]
+        for k in ["step1", "step2", "step2b"]
     )
     sys.exit(0 if all_auto else 1)
 
