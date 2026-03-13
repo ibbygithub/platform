@@ -163,10 +163,9 @@ function voicePayload(msg) {
 // ===== Bot =====
 const bot = new Telegraf(BOT_TOKEN);
 
-bot.command("status", async (ctx) => {
-  if (!isAllowedCtx(ctx)) return;
-  await ctx.reply(`✅ gateway alive; mode=${TELEGRAM_MODE}`);
-});
+// NOTE: No bot.command() handlers here — all slash commands (/status, /help, etc.)
+// are forwarded to upstream (shogun-core) as kind=text envelopes.
+// Gateway health is available via GET /health on the send API port.
 
 bot.on("text", async (ctx) => {
   if (!isAllowedCtx(ctx)) return;
