@@ -81,7 +81,7 @@ if _FIXTURES_PATH.exists():
 BOT_TOKEN       = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TEST_CHAT_ID    = os.environ.get("TEST_CHAT_ID", "").strip()
 LOKI_URL        = os.environ.get("LOKI_URL", "http://192.168.71.220:3100")
-SEND_API_URL    = os.environ.get("SEND_API_URL", "http://127.0.0.1:3000")
+SEND_API_URL    = os.environ.get("SEND_API_URL", "http://127.0.0.1:3001")
 SEND_SECRET     = os.environ.get("SEND_SECRET", "").strip()
 
 TELEGRAM_API = "https://api.telegram.org"

@@ -16,8 +16,8 @@ info:
        input. Auth: X-Send-Secret header (set SEND_SECRET env var).
 
     Servers: telegram.platform.ibbytech.com (Traefik → port 3000 inside container)
-    Internal: http://platform-telegram-gateway:3000 (platform_net)
-    Localhost: http://127.0.0.1:3000 (host-port binding for validation)
+    Internal: http://platform-telegram-gateway:3001 (platform_net)
+    Localhost: http://127.0.0.1:3001 (host-port binding for validation)
 
     Message types (inbound envelope kinds):
       - text       — regular text messages and commands
@@ -31,9 +31,9 @@ servers:
     description: FQDN via Traefik (HTTPS)
   - url: http://telegram.platform.ibbytech.com
     description: FQDN via Traefik (HTTP)
-  - url: http://platform-telegram-gateway:3000
+  - url: http://platform-telegram-gateway:3001
     description: Docker internal (platform_net)
-  - url: http://127.0.0.1:3000
+  - url: http://127.0.0.1:3001
     description: Localhost (host-port binding)
 
 paths:

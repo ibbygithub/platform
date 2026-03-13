@@ -17,7 +17,7 @@ services:
       - ./.env
 
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
 
     networks:
       - platform_net
@@ -32,7 +32,7 @@ services:
       - traefik.http.routers.telegram-http.entrypoints=web
       - traefik.http.routers.telegram-http.rule=Host(`telegram.platform.ibbytech.com`)
       - traefik.http.routers.telegram-http.service=telegram
-      - traefik.http.services.telegram.loadbalancer.server.port=3000
+      - traefik.http.services.telegram.loadbalancer.server.port=3001
 
       - traefik.http.routers.telegram-https.entrypoints=websecure
       - traefik.http.routers.telegram-https.rule=Host(`telegram.platform.ibbytech.com`)

@@ -18,7 +18,7 @@ const WEBHOOK_PORT   = parseInt(process.env.WEBHOOK_PORT || "3000", 10);
 // Set SEND_SECRET in .env. shogun-core must send X-Send-Secret header.
 // Leave empty to disable auth (not recommended outside dev).
 const SEND_SECRET    = (process.env.SEND_SECRET || "").trim();
-const SEND_API_PORT  = parseInt(process.env.SEND_API_PORT || "3000", 10);
+const SEND_API_PORT  = parseInt(process.env.SEND_API_PORT || "3001", 10);
 
 // Capability flags forwarded to upstream for policy decisions
 const CAP_CAN_SEARCH      = (process.env.CAP_CAN_SEARCH      || "false").trim().toLowerCase() === "true";
@@ -288,7 +288,7 @@ bot.on("edited_message", async (ctx) => {
 
 // ===== Outbound Send API =====
 //
-// HTTP server on SEND_API_PORT (default 3000).
+// HTTP server on SEND_API_PORT (default 3001).
 // Exposes two endpoints:
 //
 //   GET  /health  — liveness check, returns gateway mode and uptime
