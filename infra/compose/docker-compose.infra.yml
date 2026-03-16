@@ -6,6 +6,10 @@
 #   cd C:\git\work\platform\infra\compose
 #   docker compose -f docker-compose.infra.yml up -d
 #
+# Requires .env in this directory with:
+#   POSTGRES_PASSWORD=<value>
+#   TUNNEL_TOKEN=<value from Cloudflare Zero Trust → Tunnels → shogun-laptop>
+#
 # NOTE: Traefik config preserved below (commented). Restore when lab is rebuilt.
 
 networks:
@@ -15,7 +19,7 @@ networks:
 
 services:
   postgres:
-    image: postgres:17
+    image: pgvector/pgvector:pg17
     container_name: platform-postgres
     restart: unless-stopped
     environment:
@@ -33,6 +37,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: platform-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    networks:
+      - platform_net
+    depends_on:
+      - postgres
 
 volumes:
   postgres_data:

@@ -12,25 +12,24 @@ services:
     container_name: platform-reddit-gateway
     restart: unless-stopped
 
-    extra_hosts:
-      - "dbnode-01:192.168.71.221"
-
     env_file:
       - ./.env
+
+    ports:
+      - "127.0.0.1:8083:8082"    # Direct access — no Traefik in laptop mode (8082 used by shogun-core)
 
     networks:
       - platform_net
 
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=platform_net
-
-      - traefik.http.routers.reddit-http.entrypoints=web
-      - traefik.http.routers.reddit-http.rule=Host(`reddit.platform.ibbytech.com`)
-      - traefik.http.routers.reddit-http.service=reddit
-      - traefik.http.services.reddit.loadbalancer.server.port=8082
-
-      - traefik.http.routers.reddit-https.entrypoints=websecure
-      - traefik.http.routers.reddit-https.rule=Host(`reddit.platform.ibbytech.com`)
-      - traefik.http.routers.reddit-https.service=reddit
-      - traefik.http.routers.reddit-https.tls=true
+# ── Traefik labels (deferred — restore when lab is rebuilt with svcnode-01) ─────
+#   labels:
+#     - traefik.enable=true
+#     - traefik.docker.network=platform_net
+#     - traefik.http.routers.reddit-http.entrypoints=web
+#     - traefik.http.routers.reddit-http.rule=Host(`reddit.platform.ibbytech.com`)
+#     - traefik.http.routers.reddit-http.service=reddit
+#     - traefik.http.services.reddit.loadbalancer.server.port=8082
+#     - traefik.http.routers.reddit-https.entrypoints=websecure
+#     - traefik.http.routers.reddit-https.rule=Host(`reddit.platform.ibbytech.com`)
+#     - traefik.http.routers.reddit-https.service=reddit
+#     - traefik.http.routers.reddit-https.tls=true
