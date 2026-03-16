@@ -18,8 +18,7 @@ services:
     command: valkey-server --requirepass ${VALKEY_PASSWORD} --appendonly yes
 
     ports:
-      - "6379:6379"   # Published to host — allows brainnode-01 and other nodes to connect
-                      # via valkey.platform.ibbytech.com:6379
+      - "127.0.0.1:6379:6379"   # Localhost only — lab nodes used FQDN via Pi-hole; laptop mode uses container name
 
     volumes:
       - valkey-data:/data

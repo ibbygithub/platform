@@ -12,6 +12,7 @@ cron-based Python services. mltrader (ML trading bot) is a planned future projec
 ## Active Work
 | Item | Description | Phase | Status | Last Updated |
 |------|-------------|-------|--------|--------------|
+| Foundation + Shogun bootstrap | Create ibbytech-foundation repo, /start-session command, scaffold Shogun | Planning complete | Approved — ready for execution | 2026-03-12 |
 | Scraper service | Web scraper backed by Firecrawl on svcnode-01 | Production | Complete | 2026-03-05 |
 | Google Places gateway | Places search and storage | Production | Complete | 2026-03-06 |
 | LLM gateway | LLM completion service on svcnode-01 | Production | Complete | 2026-03-01 |
@@ -167,6 +168,7 @@ must follow it. Defined in: `outputs/planning/platform-test-standard-plan.md`
 ## Planning Documents
 | Document | Path | Status |
 |----------|------|--------|
+| Foundation + Shogun Bootstrap Plan | outputs/planning/foundation-shogun-bootstrap-plan.md | Approved — ready for execution |
 | MVP Testing Dashboard Plan | outputs/planning/mvp-dashboard-plan.md | Complete |
 | MCP Infrastructure Plan | outputs/planning/mcp-infrastructure-plan.md | Approved — phased execution |
 | Twitter/X Gateway Plan | outputs/planning/twitter-gateway-plan.md | Backlogged — not started |
