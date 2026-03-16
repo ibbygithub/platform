@@ -1,9 +1,12 @@
 # Platform infrastructure layer
-# Start this first — it creates platform_net which all services join.
+# Laptop recovery mode (2026-03-15): Traefik replaced with direct-port services.
+# Postgres moved here from dbnode-01 (was bare metal → now container).
 #
-# Usage (on svcnode-01):
-#   cd /opt/git/work/platform/infra/compose
+# Usage (laptop):
+#   cd C:\git\work\platform\infra\compose
 #   docker compose -f docker-compose.infra.yml up -d
+#
+# NOTE: Traefik config preserved below (commented). Restore when lab is rebuilt.
 
 networks:
   platform_net:
@@ -11,54 +14,56 @@ networks:
     driver: bridge
 
 services:
-  traefik:
-    image: traefik:v3.6.7
-    container_name: platform-traefik
+  postgres:
+    image: postgres:17
+    container_name: platform-postgres
     restart: unless-stopped
-
     environment:
-      - DOCKER_API_VERSION=1.44
-
-    command:
-      - --log.level=INFO
-
-      # Entrypoints
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.traefik.address=:8080
-
-      # Dashboard
-      - --api.dashboard=true
-
-      # Docker provider — only expose containers with traefik.enable=true
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.endpoint=unix:///var/run/docker.sock
-      - --providers.docker.network=platform_net
-
-      # File provider for TLS certs
-      - --providers.file.directory=/etc/traefik/dynamic
-      - --providers.file.watch=true
-
-    ports:
-      - "80:80"
-      - "443:443"
-      - "127.0.0.1:8080:8080"   # Dashboard — localhost only
-
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/dynamic:/etc/traefik/dynamic:ro
-      - ./traefik/certs:/certs:ro
-
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"    # Localhost only — admin access from laptop
     networks:
       - platform_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.traefik-http.entrypoints=web
-      - traefik.http.routers.traefik-http.rule=Host(`traefik.platform.ibbytech.com`)
-      - traefik.http.routers.traefik-http.service=api@internal
-      - traefik.http.routers.traefik-https.entrypoints=websecure
-      - traefik.http.routers.traefik-https.rule=Host(`traefik.platform.ibbytech.com`)
-      - traefik.http.routers.traefik-https.service=api@internal
-      - traefik.http.routers.traefik-https.tls=true
+volumes:
+  postgres_data:
+    name: platform-postgres-data
+
+# ── Traefik (deferred — restore when lab is rebuilt) ─────────────────────────
+#  traefik:
+#    image: traefik:v3.6.7
+#    container_name: platform-traefik
+#    restart: unless-stopped
+#    environment:
+#      - DOCKER_API_VERSION=1.44
+#    command:
+#      - --log.level=INFO
+#      - --entrypoints.web.address=:80
+#      - --entrypoints.websecure.address=:443
+#      - --entrypoints.traefik.address=:8080
+#      - --api.dashboard=true
+#      - --providers.docker=true
+#      - --providers.docker.exposedbydefault=false
+#      - --providers.docker.endpoint=unix:///var/run/docker.sock
+#      - --providers.docker.network=platform_net
+#      - --providers.file.directory=/etc/traefik/dynamic
+#      - --providers.file.watch=true
+#    ports:
+#      - "80:80"
+#      - "443:443"
+#      - "127.0.0.1:8080:8080"
+#    volumes:
+#      - /var/run/docker.sock:/var/run/docker.sock:ro
+#      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+#      - ./traefik/certs:/certs:ro
+#    networks:
+#      - platform_net

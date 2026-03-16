@@ -1,0 +1,401 @@
+openapi: "3.1.0"
+
+info:
+  title: "Scraper Gateway"
+  version: "1.0.0"
+  description: |
+    IbbyTech Platform scraper service. Wraps a self-hosted Firecrawl instance
+    to provide single-page scrape, multi-page crawl, URL-map discovery, and
+    LLM-based structured extraction. All results are auto-persisted to
+    platform_v1 (scraper schema) with pgvector embeddings.
+
+    Backend: Firecrawl at http://192.168.71.220:3002 (LAN-only, not via Traefik).
+    Depends on: LLM Gateway (embeddings), PostgreSQL platform_v1.
+
+servers:
+  - url: "https://scrape.platform.ibbytech.com"
+    description: "svcnode-01 via Traefik (primary — use this)"
+  - url: "http://192.168.71.220:8083"
+    description: "svcnode-01 direct (fallback if DNS unavailable)"
+  - url: "http://platform-scraper-api:8083"
+    description: "Internal platform_net (from other containers on svcnode-01)"
+
+components:
+  securitySchemes: {}
+
+security: []
+
+paths:
+
+  /health:
+    get:
+      summary: "Service health and dependency status"
+      description: |
+        Returns health of the scraper wrapper, Firecrawl backend, and database.
+        Called by platform_preflight.py. Returns HTTP 200 when operational.
+        No authentication required.
+      operationId: "getHealth"
+      responses:
+        "200":
+          description: "Service is healthy"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                ok: true
+                time: 1741651200
+                firecrawl_reachable: true
+                db_connected: true
+                persist_enabled: true
+                embed_provider: "openai"
+                embed_model: "text-embedding-3-small"
+
+  /v1/scrape:
+    post:
+      summary: "Scrape a single URL"
+      description: |
+        Scrapes one URL via Firecrawl and returns content in requested formats.
+        Result is persisted to scraper.scrape_results with a pgvector embedding.
+
+        Timeout: allow 90s. Firecrawl uses headless Chromium (Playwright) for
+        JS-rendered pages; falls back to fetch engine if Playwright is unavailable.
+      operationId: "scrapeUrl"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScrapeRequest"
+            example:
+              url: "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html"
+              formats: ["markdown", "html"]
+      responses:
+        "200":
+          description: "Scrape completed successfully"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScrapeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/UpstreamError"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  /v1/crawl:
+    post:
+      summary: "Crawl multiple pages from a starting URL"
+      description: |
+        Crawls up to `limit` pages starting from `url`. The wrapper polls
+        Firecrawl's async job internally and returns the complete result set
+        (not a job ID). Callers must set HTTP timeouts of at least 360s.
+
+        Results persisted to scraper.crawl_results with embeddings per page.
+
+        Known quirk: max_depth=1 returns only the root URL. Use max_depth >= 2
+        to traverse child pages. See service doc Known Limitations #1.
+      operationId: "crawlSite"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrawlRequest"
+            example:
+              url: "https://books.toscrape.com"
+              max_depth: 2
+              limit: 10
+              formats: ["markdown"]
+      responses:
+        "200":
+          description: "Crawl completed — all pages returned"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrawlResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/UpstreamError"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  /v1/map:
+    post:
+      summary: "Discover all URLs on a site without scraping content"
+      description: |
+        Returns a list of URLs found on the target site. Firecrawl uses
+        sitemap.xml for discovery. Sites without a sitemap will return
+        only the root URL — use /v1/crawl for link discovery on arbitrary sites.
+
+        Results persisted to scraper.map_results (URL lists only, no embeddings).
+
+        Timeout: allow 90s.
+      operationId: "mapSite"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapRequest"
+            example:
+              url: "https://books.toscrape.com"
+              limit: 500
+      responses:
+        "200":
+          description: "URL discovery completed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/UpstreamError"
+
+  /v1/extract:
+    post:
+      summary: "Extract structured data from a URL using LLM"
+      description: |
+        Extracts structured data from one or more URLs using Firecrawl's LLM
+        extraction. Requires OPENAI_API_KEY in Firecrawl's .env on svcnode-01.
+
+        ⚠ DEGRADED: OPENAI_API_KEY is not currently set in Firecrawl's .env.
+        This endpoint will return an error until the key is configured.
+        See Capability Registry status: degraded.
+
+        Results persisted to scraper.extract_results with embeddings.
+      operationId: "extractStructured"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtractRequest"
+            example:
+              urls: ["https://books.toscrape.com/catalogue/page-1.html"]
+              prompt: "Extract book titles and prices from this page."
+              schema_def:
+                type: "array"
+                items:
+                  type: "object"
+                  properties:
+                    book_title: { type: "string" }
+                    price: { type: "string" }
+                  required: ["book_title", "price"]
+      responses:
+        "200":
+          description: "Extraction completed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/UpstreamError"
+
+components:
+
+  responses:
+    BadRequest:
+      description: "Invalid request — missing required fields or bad format"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UpstreamError:
+      description: "Firecrawl backend error or unreachable"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Timeout:
+      description: "Crawl or scrape exceeded the 300s internal timeout"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+
+    HealthResponse:
+      type: object
+      required: [ok, firecrawl_reachable, db_connected]
+      properties:
+        ok:
+          type: boolean
+          description: "True when all dependencies are healthy"
+        time:
+          type: integer
+          description: "Unix timestamp of the health check"
+        firecrawl_reachable:
+          type: boolean
+          description: "Whether the Firecrawl backend responded"
+        db_connected:
+          type: boolean
+          description: "Whether the PostgreSQL connection is active"
+        persist_enabled:
+          type: boolean
+          description: "Whether result persistence to DB is enabled"
+        embed_provider:
+          type: string
+          description: "LLM provider used for embeddings"
+          example: "openai"
+        embed_model:
+          type: string
+          description: "Embedding model in use"
+          example: "text-embedding-3-small"
+
+    ScrapeRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: "URL to scrape"
+        formats:
+          type: array
+          items:
+            type: string
+            enum: [markdown, html, screenshot, links]
+          default: ["markdown"]
+          description: "Content formats to return. markdown and html are most useful."
+        wait_for_ms:
+          type: integer
+          description: "Milliseconds to wait before scraping (for JS-heavy pages)"
+          default: 0
+          minimum: 0
+          maximum: 10000
+
+    ScrapeResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            markdown:
+              type: string
+              description: "Page content as Markdown"
+            html:
+              type: string
+              description: "Raw HTML (if requested)"
+            metadata:
+              $ref: "#/components/schemas/PageMetadata"
+
+    CrawlRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: "Starting URL for the crawl"
+        max_depth:
+          type: integer
+          description: "Crawl depth. Must be >= 2 to traverse child pages."
+          default: 2
+          minimum: 1
+        limit:
+          type: integer
+          description: "Maximum number of pages to crawl"
+          default: 20
+          minimum: 1
+          maximum: 500
+        formats:
+          type: array
+          items:
+            type: string
+            enum: [markdown, html]
+          default: ["markdown"]
+
+    CrawlResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              markdown:
+                type: string
+              html:
+                type: string
+              metadata:
+                $ref: "#/components/schemas/PageMetadata"
+
+    MapRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: "Root URL to map"
+        limit:
+          type: integer
+          description: "Maximum number of URLs to return"
+          default: 500
+          minimum: 1
+          maximum: 5000
+
+    MapResponse:
+      type: object
+      properties:
+        links:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: "All discovered URLs on the site"
+
+    ExtractRequest:
+      type: object
+      required: [urls, prompt]
+      properties:
+        urls:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: "One or more URLs to extract from"
+          minItems: 1
+        prompt:
+          type: string
+          description: "Natural language instruction for what to extract"
+        schema_def:
+          type: object
+          description: "JSON Schema defining the structure of extracted data"
+
+    ExtractResponse:
+      type: object
+      properties:
+        data:
+          description: "Extracted data matching the provided schema_def"
+
+    PageMetadata:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        sourceURL:
+          type: string
+          format: uri
+        statusCode:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: "Human-readable error description"
+        detail:
+          type: string
+          description: "Additional detail or upstream error message"

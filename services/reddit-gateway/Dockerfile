@@ -5,7 +5,8 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py ./
+# Copy all Python modules (modular structure: app.py + reddit_client, db, embeddings, scheduler)
+COPY *.py ./
 
 EXPOSE 8082
 

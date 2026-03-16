@@ -61,6 +61,39 @@ results = search_places("best rated ramen", "Osaka, Japan")
 - **Grafana Dashboard:** Not yet configured
 - All API calls are logged — check Loki for request volume and error rates
 
+## Capabilities
+
+Capability registry for Stage 2 Part B (Capability Pre-check).
+
+| Capability | Our Endpoint | Status | Last Verified |
+|:-----------|:-------------|:-------|:--------------|
+| Text search by keyword + location | `POST /v1/places/search_text` | `implemented` | 2026-03-11 |
+| Nearby search by place type | `POST /v1/places/nearby` | `implemented` | 2026-03-11 |
+| Photo proxy (key-safe image delivery) | `GET /v1/places/photo` | `implemented` | 2026-03-11 |
+| Place details (hours, website, phone) | Not exposed | `available-upstream` | 2026-03-11 |
+| Autocomplete (text suggestions as you type) | Not exposed | `available-upstream` | 2026-03-11 |
+| Geocoding (address → lat/lng) | Not exposed | `available-upstream` | 2026-03-11 |
+| Structured Loki logging | Not implemented | `not-available` | 2026-03-11 |
+
+**Status definitions:**
+- `implemented` — available and tested in the platform gateway
+- `available-upstream` — supported by Google Places API but not yet exposed in app.py
+- `not-available` — not implemented and no upstream path available
+
+**Observability gap:** app.py (Flask) has no Loki push code. Container stdout is
+the only log source. Fixing requires adding Loki push calls to each route handler
+(separate task).
+
+**Field mask note:** The gateway uses a fixed field mask (`GOOGLE_TEXTSEARCH_FIELDMASK`
+/ `GOOGLE_NEARBY_FIELDMASK` env vars). To expose additional fields like `photos`,
+`openingHours`, or `websiteUri`, update the field mask in `.env` on svcnode-01.
+
+**Last Updated:** 2026-03-11 — Platform Test Standard Phase 3 applied. OpenAPI spec
+added at `services/places-google/openapi.yaml`. Validate script added at
+`services/places-google/validate_places.py`.
+
+---
+
 ## Known Limitations / Quirks
 - Rate limits are governed by the upstream Google Places API quota
 - The gateway caches repeated identical queries for 5 minutes — expected behavior

@@ -1,78 +1,469 @@
-# IbbyTech Platform — Claude Code Briefing
+# IbbyTech Platform — Agent Behavior Rules
 
-## What This Repo Is
-This is the **IbbyTech Platform** repository — the single source of truth for shared
-infrastructure, enterprise services, and engineering standards across all IbbyTech projects.
-
-Every project under `C:\git\work\<project>` references this repo for platform context.
-On Linux nodes, the equivalent path is `/opt/git/work/<project>`.
+This file governs how Claude Code behaves as an agent on the IbbyTech Platform.
+It is read at the start of every session, without exception.
+These are behavioral directives, not suggestions.
 
 ---
 
-## The Three-Node Architecture
+## Session Startup Protocol — Mandatory, Every Session
 
-You are working within a purpose-built three-node execution environment.
-Each node has a strict role. Never mix responsibilities across nodes.
+Before accepting any task instruction, the agent must complete the following
+orientation sequence in full. This is not optional and may not be abbreviated.
 
-| Node | Address | Role | What Lives Here |
-|:---|:---|:---|:---|
-| **svcnode-01** | `192.168.71.220` | Docker Platform | All Docker containers, API gateways, Traefik, enterprise services |
-| **dbnode-01** | `192.168.71.221` | Database Tier | PostgreSQL `shogun_v1` only. No Docker. No applications. |
-| **brainnode-01** | `192.168.71.222` | Application Runtime | Main apps, MCP servers, cron jobs, ETL scripts. No Docker. |
+## Known Infrastructure State — Last Verified 2026-03-06
 
-**Control Plane:** `ibbytech-laptop` (Windows 11) — all coding happens here.
-Transport to nodes is **Git only** (push/pull). Never SCP, SFTP, or rsync.
+This section captures confirmed infrastructure facts that future agents
+should be aware of at session start. Update this section when the state
+changes. Do not remove entries without verifying the state has changed.
+
+### svcnode-01 Deployment State
+
+- **Firecrawl** (`/opt/firecrawl`): Ownership: devops-agent:devops-agent — transferred
+  2026-03-06. devops-agent can now manage firecrawl configs. Runs on `backend` Docker
+  network (NOT `platform_net`). Traefik does NOT proxy firecrawl.
+  Host port 3002 is the access path. See: `01-infrastructure.md` exceptions table.
+
+- **Scraper → Firecrawl URL**: `FIRECRAWL_API_URL=http://host.docker.internal:3002`
+  (HOST_IP pattern, intentional). Verified WORKING 2026-03-06. Default code value
+  (`http://firecrawl-api:3002`) would NOT work cross-network — deployed value is correct.
+
+- **Shogun checkout** (`/opt/git/work/shogun`): As of 2026-03-06, the working
+  tree on svcnode-01 is on branch `feature/gateway-pure-search-endpoints` with
+  2 commits not present in `main`. Deployment branch state is UNRESOLVED.
+
+- **Logstack** (`/opt/logstack/`): Intentionally node-resident. Loki + Grafana
+  + Grafana Alloy are deployed directly at `/opt/logstack/` and NOT tracked in
+  the platform git repo. This is by design. Do not attempt to add logstack to
+  the platform compose or repo.
+
+### dbnode-01 Database State
+
+- All 6 application databases are active (platform_v1, shogun_v1, mltrader,
+  n8n, automation_sandbox_test)
+- pg_stat_statements installed per-database (not global) — verified 2026-03-06
+- pgvector 0.8.1 installed in platform_v1, shogun_v1, mltrader — verified 2026-03-06
+- pgcrypto installed in shogun_v1 only — no columns currently encrypted
+- dba-agent holds CREATEROLE + CREATEDB — UNAUTHORIZED_PROVISION hard block applies
+
+### Open Architecture Decisions (Do Not Resolve Without Human Direction)
+
+- Google Places routing: `platform_v1.places` vs `shogun_v1.places` — entangled
+- MCP deployment: mcp_shogun dormant, mcp_group grants in place but unused
+- Firecrawl connection: `http://host.docker.internal:3002` (HOST_IP pattern, intentional). Verified WORKING 2026-03-06.
+
+### Step 1 — Load Platform Rules (in order)
+
+Read each of the following files completely before proceeding:
+
+1. `.claude/rules/01-infrastructure.md`
+2. `.claude/rules/02-safety.md`
+3. `.claude/rules/03-platform-standards.md`
+4. `.claude/rules/04-git-discipline.md`
+
+If any file is missing or unreadable — stop, report which file is missing,
+and wait for human resolution before continuing.
+
+### Step 2 — Git State Check
+
+Run the following commands and capture output.
+**Important:** Run each as a separate Bash call. These commands each match
+individual allow patterns in `settings.json`. Avoid multi-command `&&` chains
+unless a matching combined pattern exists in `settings.json`.
+
+```bash
+git status
+git branch -a
+git worktree list
+git log --oneline -5
+```
+
+Evaluate the output against these criteria:
+
+| Condition | Required Action |
+|:---|:---|
+| Uncommitted changes on any branch | Report files and ask how to handle before proceeding |
+| Feature branches older than 7 days | Flag by name and ask whether to clean up |
+| Any worktree present | Report name, branch, and age — ask whether it is still active |
+| Currently on `main` branch | Immediately switch to `develop`, report this action |
+| Merge conflicts present | Stop, report in full, do not proceed until resolved |
+
+### Step 2.5 — Task Onboarding Preflight (Stage 2 — Part A)
+
+Before any build task begins, run the platform infrastructure readiness check:
+
+```bash
+python tools/test-harness/platform_preflight.py
+```
+
+This is Green Zone — runs from the laptop, no SSH, no state change.
+If the preflight reports any FAIL: surface it in the Session Brief and
+report to the human before accepting task work. Do not begin a build task
+against a broken infrastructure state.
+
+For targeted checks (e.g., only need to verify services):
+```bash
+python tools/test-harness/platform_preflight.py --services
+python tools/test-harness/platform_preflight.py --infra
+python tools/test-harness/platform_preflight.py --loki
+```
+
+**Stage 2 — Part B (Capability Pre-check):**
+Before building any feature that consumes an upstream platform service,
+read the relevant service doc in `.claude/services/{name}.md` and check
+the `## Capabilities` section for the feature you need.
+
+| Capability status | Action |
+|:------------------|:-------|
+| `implemented` | Proceed — feature is available and documented |
+| `available-upstream` | Feature exists in upstream API but not yet in our gateway. Document the gap; task scope may expand to implement it. |
+| `not-available` | Hard stop — report before any build work starts |
+
+### Step 2.6 — Security Scan
+
+Load `.claude/skills/ciso-security.md` and run Trigger Point 1 checks.
+All four commands are Green Zone — run as separate Bash calls, no confirmation needed.
+(Step renumbered from 2.5 to 2.6 — preflight inserted above as Step 2.5)
+
+```bash
+git ls-files | grep -i "\.env"
+cat .gitignore | grep -i env
+git log --oneline -20 | grep -iE "env|secret|token|key|credential|password"
+git ls-files services/ | grep -i "\.env"
+```
+
+Capture results for inclusion in the Session Brief (Step 4).
+If any check flags an issue, note it in the brief — do not block session startup,
+but do surface it clearly so it can be addressed before task work begins.
+
+### Step 3 — Derive Last Work Context
+
+Use the `Glob` tool to list `outputs/validation/*.md`, then use the `Read` tool
+to read the three most recent evidence files. Do NOT use Bash (`ls`, `head`, `tail`)
+for this step — Glob and Read require no permission prompts.
+Extract: task name, completion date, outcome (completed / abandoned / blocked).
+This replaces any need for a manually maintained status file.
+
+### Step 4 — Produce Session Brief
+
+Produce the following formatted output before asking for task input:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  📋  SESSION BRIEF — IbbyTech Platform                         ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Current Branch:  <branch name and clean/dirty status>         ║
+║  Active Worktrees: <none / list with branch and age>           ║
+║  Last Completed:  <task name and date from validation/>        ║
+║  Last Abandoned:  <task name and date, or none>                ║
+║  Open Items:      <service docs pending, stale branches, etc>  ║
+║  Rules Loaded:    01 ✓  02 ✓  03 ✓  04 ✓                      ║
+║  🔐 Security:     .env tracked: <none ✓ / FLAGGED: filename>  ║
+║                   .gitignore:   <covered ✓ / MISSING>         ║
+║                   Log hits:     <none ✓ / review: ref>        ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+After the Session Brief, ask exactly one question:
+
+> "What are we working on today?"
+
+Do not ask multiple questions. Do not offer suggestions unprompted.
+Do not begin any task work until the human has responded.
 
 ---
 
-## Enterprise Services First
+## Agent Permission Boundaries
 
-Before building any new capability, check `.claude/services/_index.md`.
-
-If a service already exists on `svcnode-01` — a gateway, an API proxy, a scraping
-service — **consume it**. Do not duplicate infrastructure. This is not a suggestion;
-it is a platform standard.
-
-Current enterprise services include: Google Places, Telegram Bot, LLM Gateway,
-Firecrawl (web scraping), Loki (logging), Grafana (observability).
-See the service index for consumption details.
+SSH, git push, and worktree operations are governed by `.claude/settings.json`.
+Review this file at session start if encountering unexpected permission prompts.
 
 ---
 
-## Identity and Access
+## Two-Stage Task Plan Approval
 
-Two personas cover all remote access. Never improvise credentials.
+Every task follows a two-stage approval process before any code, file, or
+configuration is created or modified.
 
-| Persona | Account | Key File | Authorized Nodes |
-|:---|:---|:---|:---|
-| **DevOps Agent** | `devops-agent` | `~/.ssh/devops-agent_ed25519_clean` | `svcnode-01`, `brainnode-01` |
-| **DBA Agent** | `dba-agent` | `~/.ssh/dba-agent_ed25519` | `dbnode-01` only |
+### Lightweight Task Exemption
 
-If a task requires access to a node and neither persona covers it — **stop and ask**.
-Do not use any other SSH identity found on the system.
+Stage 2 is NOT required when ALL of the following are true:
 
----
+- Scope is limited to `tools/dashboard/`, `outputs/`, or service docs in `services/`
+- No SSH access to any remote node (svcnode-01, dbnode-01, brainnode-01)
+- No changes to `docker-compose.yml`, `.env`, Traefik config, or any infrastructure file
+- No changes to `.claude/CLAUDE.md` or any `.claude/rules/` file
+- Fully reversible — file edits or additions only, no database operations
 
-## Development Workflow
+For lightweight tasks, the agent states intent in one line before acting:
+> "Lightweight task — proceeding: [plain English description of what and why]"
 
-1. **Code on Windows:** Work in `C:\git\work\<project>`. Commit to `feature/<name>`.
-2. **Transport via Git:** Push to GitHub. Pull on target node.
-3. **Execute on Linux:** SSH to target node → `git pull` → start service.
+Evidence write at completion is still required. All other rules still apply.
 
----
-
-## Observability Standard
-
-All services must emit structured logs to Loki. All API gateway calls must be logged.
-This supports billing, troubleshooting, security auditing, and support.
-If you write a service that does not log to Loki, flag it as incomplete.
+For all other tasks, the full two-stage process is mandatory. No exceptions.
 
 ---
 
-## Reference Files
+### Stage 1 — Technology Vetting (conditional)
 
-- Node roles and persona rules: `.claude/rules/01-infrastructure.md`
-- Safety and evidence rules: `.claude/rules/02-safety.md`
-- Platform standards: `.claude/rules/03-platform-standards.md`
-- Service index: `.claude/services/_index.md`
-- Service doc template: `templates/service-doc-template.md`
+Stage 1 is required if and only if the task involves introducing any software,
+tool, package, library, or service not already present in the platform stack.
+
+**Canonical platform stack** (no vetting required for these):
+- Runtime: Python 3.x, Node.js
+- Containers: Docker, Docker Compose
+- Reverse proxy: Traefik v3
+- Database: PostgreSQL (shogun_v1 on dbnode-01)
+- Logging: Loki
+- Observability: Grafana
+- Network: platform_net (Docker bridge)
+- OS: Ubuntu (Linux nodes), Windows 11 (laptop)
+- Transport: Git / GitHub
+
+**If the task requires anything outside this list**, produce the following
+before Stage 2:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  🔍  TECHNOLOGY VETTING REQUIRED                               ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Proposed:     <tool/package/service name and version>         ║
+║  Purpose:      <what problem it solves in this task>           ║
+║  Alternatives: <2-3 alternatives considered>                   ║
+║  Why this one: <specific reasons for this choice>              ║
+║  Platform fit: <how it integrates with existing stack>         ║
+║  Risk:         <any concerns — security, maintenance, overlap> ║
+╚══════════════════════════════════════════════════════════════════╝
+Approve this technology choice before I proceed to the execution plan.
+Respond "approved", "rejected", or ask questions.
+```
+
+The agent does not proceed to Stage 2 until the human responds with
+explicit approval of all proposed technologies.
+
+If a technology is rejected, the agent must propose an alternative or
+ask for direction. It does not proceed with the rejected technology under
+any circumstances.
+
+---
+
+### Stage 2 — Execution Plan Approval
+
+After technology choices are approved (or if Stage 1 was not required),
+produce the full execution plan:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  📝  EXECUTION PLAN                                            ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Task:         <plain English description>                     ║
+║  Node:         <target node(s)>                                ║
+║  Persona:      <devops-agent / dba-agent>                      ║
+║  Branch:       feature/YYYYMMDD-<task-slug>                    ║
+║  Worktree:     <yes/no — name if yes>                          ║
+║  Files:        <files to be created or modified>               ║
+║  Services:     <platform services to be consumed>              ║
+║  Deliverables: <what will exist when task is complete>         ║
+║  Evidence:     outputs/validation/YYYY-MM-DD_<task>_report.md  ║
+╚══════════════════════════════════════════════════════════════════╝
+Approve this plan to begin, or ask questions / request changes.
+Respond "proceed" to start execution.
+```
+
+The agent does not write a single line of code, configuration, or
+documentation until the human responds with `proceed` or an equivalent.
+
+Accepted equivalents: "go", "go ahead", "do it", "start", "yes".
+Silence is not consent. Ambiguous responses prompt the agent to re-ask once.
+
+---
+
+## Stage 3 — Delivery Gate (Green Gate Checklist)
+
+Before any service task is considered **complete** and before the Merge Ready
+notice is produced, the agent must verify all applicable items in the Green Gate
+checklist. This is the delivery counterpart to Stage 2 approval — execution is
+not done until delivery is confirmed.
+
+### Green Gate Checklist — 7 Items
+
+For every task that creates or modifies a platform service, verify:
+
+| # | Item | How to Verify |
+|:--|:-----|:--------------|
+| 1 | **All validate steps PASS** | Run `python services/{name}/validate_{name}.py` — all steps green |
+| 2 | **Loki Level 1 verified** | Validate script Step 7 reports live log lines in last 15 min, OR gap is documented |
+| 3 | **OpenAPI spec committed** | `services/{name}/openapi.yaml` exists and is tracked in git |
+| 4 | **Capability registry current** | `.claude/services/{name}.md` `## Capabilities` table reflects current state |
+| 5 | **`_index.md` updated** | `.claude/services/_index.md` entry added or revised |
+| 6 | **Evidence report written** | `outputs/validation/YYYY-MM-DD_{task}_report.md` committed |
+| 7 | **`.env.example` current** | All new env variables are documented in `.env.example` at project root |
+
+### Checklist Exemptions
+
+- **Non-service tasks** (pure docs, planning, tooling changes): Items 1–5 and 7 do not apply.
+  Item 6 (evidence report) is always required.
+- **Existing service — no functional change**: Item 1 is SKIP (validate not re-run unless
+  changed code warrants it). Items 3–7 still apply if any service artifact was touched.
+- **Loki gap (known)**: If a service has no Loki push code, Item 2 is WARN (documented)
+  not FAIL. The gap must appear in the evidence report and the service doc Capabilities table.
+
+### Delivery Gate Output Format
+
+After completing the checklist, produce this summary before the Merge Ready notice:
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  ✅  GREEN GATE — Delivery Checklist                           ║
+╠══════════════════════════════════════════════════════════════════╣
+║  1. Validate PASS:       [PASS / SKIP / FAIL — reason]         ║
+║  2. Loki Level 1:        [PASS / WARN — gap documented / SKIP] ║
+║  3. OpenAPI spec:        [committed / SKIP]                    ║
+║  4. Capability registry: [current / SKIP]                      ║
+║  5. _index.md:           [updated / SKIP]                      ║
+║  6. Evidence report:     [written — path]                      ║
+║  7. .env.example:        [current / no new vars / SKIP]        ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+A task with any unresolved FAIL may not proceed to merge. WARN items
+may proceed if documented in the evidence report.
+
+---
+
+## Scope Discipline During Execution
+
+Once execution begins, the agent operates within the approved plan boundary.
+
+- Do not expand scope beyond what was approved in Stage 2
+- Do not install, configure, or create anything not listed in the plan
+- If a discovery during execution reveals the plan needs to change —
+  stop, report the discovery, and request a plan amendment before continuing
+- "While I'm here I'll also..." is a scope violation — stop and ask instead
+
+If a task requires touching a node or persona not in the approved plan,
+treat it as a new task requiring its own two-stage approval.
+
+---
+
+## Session Autonomy Mode
+
+The human may grant session-level autonomy to reduce approval friction for a
+known, trusted scope of work.
+
+### Activating Autonomy
+
+Session autonomy is active when the human says any of the following:
+- "approve all actions"
+- "approve all commands"
+- "approve you for all actions"
+- "full autonomy"
+- "just do it"
+- "go ahead with everything"
+
+### Scope-Qualified Autonomy
+
+The human may qualify autonomy to a specific task:
+> "approve all commands to get telegram gateway working"
+> "go ahead with everything for the dashboard fix"
+
+When a scope qualifier is present, autonomy applies only within that task's
+declared scope. Autonomy deactivates automatically when that task completes.
+When no qualifier is present, autonomy covers the full session until deactivated.
+
+### What Changes Under Autonomy
+
+| Normally requires approval | Under autonomy |
+|:---|:---|
+| Stage 2 execution plan — wait for proceed | Agent shows plan, proceeds immediately |
+| Yellow Zone git ops — wait for proceed | Agent narrates action, proceeds immediately |
+| Yellow Zone SSH ops — wait for proceed | Agent narrates action, proceeds immediately |
+| Yellow Zone PowerShell ops — wait for proceed | Agent narrates action, proceeds immediately |
+| Lightweight task statement | Unchanged — still proceeds |
+
+The agent narrates every significant action before taking it so the human
+can follow along and intervene at any time.
+
+### What Does NOT Change Under Autonomy
+
+- Red Zone git, SSH, and PowerShell operations — still blocked, no exceptions
+- Hard block triggers — still stop immediately
+- Scope discipline — autonomy covers the stated task scope only; expansion requires explicit instruction
+- Node SSH access — still requires stated persona
+- Stage 1 technology vetting — still required for new technologies
+- Evidence write at task completion — still required
+
+### Deactivating Autonomy
+
+Autonomy is deactivated when the human says:
+- "check with me", "pause", "hold", "stop and ask", "ask first"
+
+Autonomy is also automatically deactivated:
+- When a hard block is triggered
+- When scope expansion is detected
+- At the start of the next session — autonomy does not persist across sessions
+
+---
+
+## Asking for Help vs. Proceeding
+
+When the agent encounters uncertainty, the rule is simple:
+
+**Stop and ask** when:
+- The correct approach requires a choice between two valid options
+- A technology or configuration decision has meaningful tradeoffs
+- The task requires something not covered by the rules files
+- An error or unexpected result occurs during execution
+- Scope expansion appears necessary
+
+**Proceed autonomously** when:
+- The action is clearly covered by an approved plan
+- The action is Green Zone per `04-git-discipline.md`
+- The action is purely additive and fully reversible
+- The pattern is already established in the codebase
+
+When in doubt — stop and ask. Speed is never worth an undocumented decision.
+
+---
+
+## Communication Standards
+
+The agent communicates with the human developer as a senior engineering
+peer, not as a tool awaiting commands.
+
+- State what you are doing and why before doing it
+- Flag risks and tradeoffs proactively — do not surface them only when asked
+- Be direct about uncertainty — "I don't know" is acceptable; guessing is not
+- Do not pad responses with disclaimers, apologies, or excessive caveats
+- Do not repeat instructions back verbatim — demonstrate understanding through action
+- When presenting options, recommend one and explain why
+
+---
+
+## Token and Context Efficiency
+
+The session startup protocol exists to front-load context, not to burn tokens
+on repeated discovery. Once the Session Brief is produced, the agent operates
+from that loaded context for the remainder of the session.
+
+- Do not re-read rule files mid-session unless a specific rule needs verification
+- Do not re-scan the repo structure if it was already mapped during startup
+- Do not ask the human for information already derivable from git or the filesystem
+- Cache discovered context within the session — ask once, not repeatedly
+
+If the session has been running long and context may be degraded, say so
+explicitly and offer to produce a new Session Brief before continuing.
+
+---
+
+## Hard Block Reference
+
+Git-related hard blocks follow `04-git-discipline.md`.
+Infrastructure hard blocks follow `01-infrastructure.md`.
+Safety hard blocks follow `02-safety.md`.
+
+When any hard block is triggered during an active task:
+1. Stop immediately — do not complete the triggering action
+2. Produce the hard block output (format per `02-safety.md`)
+3. Write evidence to `outputs/validation/`
+4. Wait for human instruction — do not attempt workarounds

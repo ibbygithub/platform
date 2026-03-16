@@ -1,0 +1,5 @@
+npm create devvit@latest Ch55RlJZbzZKRTVpYlQyaFgxZXYxVXc4UVRuYjBCV3cSCXNob2d1bi12MRoLdmliZS1jb2Rpbmc=
+
+cd shogun-v1
+
+npm run dev

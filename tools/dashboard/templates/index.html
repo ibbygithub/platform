@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IbbyTech Platform Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tab-btn.active { @apply border-b-2 border-blue-500 text-blue-600; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .source-chunk { border-left: 3px solid #3b82f6; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+<!-- Header -->
+<header class="bg-white border-b px-6 py-3 flex items-center gap-3 shadow-sm">
+  <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+  <h1 class="font-semibold text-lg">IbbyTech Platform Dashboard</h1>
+  <span class="ml-auto text-xs text-gray-400" id="clock"></span>
+</header>
+
+<!-- Tabs -->
+<nav class="bg-white border-b px-6 flex gap-6 text-sm font-medium text-gray-500">
+  <button class="tab-btn py-3 active" data-tab="dashboard">Dashboard</button>
+  <button class="tab-btn py-3" data-tab="documents">Documents</button>
+  <button class="tab-btn py-3" data-tab="rag">RAG Chat</button>
+  <button class="tab-btn py-3" data-tab="scraper">Scraper</button>
+  <button class="tab-btn py-3" data-tab="places">Places</button>
+</nav>
+
+<main class="max-w-5xl mx-auto p-6">
+
+  <!-- ── Tab: Dashboard ── -->
+  <div id="tab-dashboard" class="tab-pane active">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-semibold">Service Health</h2>
+      <button onclick="loadHealth()" class="text-xs bg-blue-50 border border-blue-200 text-blue-600 px-3 py-1 rounded hover:bg-blue-100">Refresh</button>
+    </div>
+    <div id="health-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="text-gray-400 text-sm col-span-3">Loading...</div>
+    </div>
+    <p class="text-xs text-gray-400 mt-4">Auto-refreshes every 30 seconds.</p>
+  </div>
+
+  <!-- ── Tab: Documents ── -->
+  <div id="tab-documents" class="tab-pane" data-log-tab="documents">
+    <h2 class="text-base font-semibold mb-4">Document Index</h2>
+
+    <!-- Upload zone -->
+    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-6 bg-white"
+         id="drop-zone">
+      <p class="text-gray-500 mb-3">Drop a file here or click to upload</p>
+      <p class="text-xs text-gray-400 mb-4">PDF, Word (.docx), TXT, Markdown</p>
+      <input id="file-input" type="file" accept=".pdf,.docx,.txt,.md" class="hidden" onchange="uploadFile(this)" />
+      <button onclick="document.getElementById('file-input').click()"
+              class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
+        Choose file
+      </button>
+    </div>
+    <div id="upload-status" class="text-sm mb-4 hidden"></div>
+
+    <!-- Document list -->
+    <div id="doc-list">
+      <div class="text-gray-400 text-sm">Loading...</div>
+    </div>
+  </div>
+
+  <!-- ── Tab: RAG Chat ── -->
+  <div id="tab-rag" class="tab-pane" data-log-tab="rag">
+    <h2 class="text-base font-semibold mb-1">RAG Chat</h2>
+    <p class="text-xs text-gray-400 mb-4">Answers are grounded in your indexed documents.</p>
+
+    <!-- Conversation thread -->
+    <div id="chat-thread" class="space-y-4 mb-4 max-h-[60vh] overflow-y-auto pr-1"></div>
+
+    <!-- Input -->
+    <div class="flex gap-2">
+      <input id="rag-input" type="text" placeholder="Ask a question about your documents..."
+             class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+             onkeydown="if(event.key==='Enter') sendRagQuery()" />
+      <button onclick="sendRagQuery()"
+              class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Ask</button>
+    </div>
+    <button onclick="clearChat()" class="text-xs text-gray-400 mt-2 hover:underline">Clear conversation</button>
+  </div>
+
+  <!-- ── Tab: Scraper ── -->
+  <div id="tab-scraper" class="tab-pane" data-log-tab="scraper">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-base font-semibold">Web Scraper</h2>
+      <details class="relative">
+        <summary class="text-xs bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded cursor-pointer hover:bg-purple-100 select-none">
+          Quick tests &#9660;
+        </summary>
+        <div class="absolute right-0 mt-1 z-10 bg-white border rounded-lg shadow-lg p-3 w-80 space-y-2">
+          <p class="text-xs font-medium text-gray-600 mb-2">Reddit Devvit Docs</p>
+          <button onclick="quickTest('scrape','https://developers.reddit.com/docs/capabilities/devvit-web/devvit_web_configuration')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Scrape</span> — devvit_web_configuration
+          </button>
+          <button onclick="quickTest('crawl','https://developers.reddit.com/docs/capabilities/devvit-web/')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Crawl</span> — all devvit-web docs (depth 3, 30 pages)
+          </button>
+          <button onclick="quickTest('crawl','https://developers.reddit.com/docs/')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Crawl</span> — full devvit docs (depth 3, 50 pages)
+          </button>
+          <button onclick="quickTest('map','https://developers.reddit.com/docs/')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Map</span> — discover all devvit doc URLs
+          </button>
+          <button onclick="quickTest('extract','https://developers.reddit.com/docs/capabilities/devvit-web/devvit_web_configuration')"
+                  class="w-full text-left text-xs px-3 py-2 rounded bg-gray-50 hover:bg-blue-50 border">
+            <span class="font-medium">Extract</span> — devvit config properties &amp; types
+          </button>
+        </div>
+      </details>
+    </div>
+
+    <!-- Mode selector -->
+    <div class="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+      <button class="scraper-mode-btn active px-3 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm" data-mode="scrape">Scrape</button>
+      <button class="scraper-mode-btn px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700" data-mode="crawl">Crawl</button>
+      <button class="scraper-mode-btn px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700" data-mode="map">Map</button>
+      <button class="scraper-mode-btn px-3 py-1.5 text-xs font-medium rounded-md text-gray-500 hover:text-gray-700" data-mode="extract">Extract</button>
+    </div>
+
+    <!-- ── Scrape mode ── -->
+    <div id="scraper-panel-scrape" class="scraper-panel">
+      <p class="text-xs text-gray-400 mb-3">Fetch a single page and return it as markdown.</p>
+      <div class="flex gap-2 mb-2">
+        <input id="scrape-url" type="url" placeholder="https://example.com/article"
+               class="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+               onkeydown="if(event.key==='Enter') runScrape()" />
+        <button onclick="runScrape()"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Scrape</button>
+      </div>
+      <details class="mb-3 border rounded bg-gray-50">
+        <summary class="text-xs font-medium text-gray-500 px-3 py-2 cursor-pointer">Advanced options</summary>
+        <div class="p-3 grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block text-gray-500 mb-1">Wait for JS (ms)</label>
+            <input id="scrape-wait" type="number" placeholder="e.g. 2000"
+                   class="w-full border rounded px-2 py-1 text-sm focus:outline-none" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-gray-500 mb-1">Include HTML tags (comma-separated, e.g. article,main)</label>
+            <input id="scrape-include-tags" type="text" placeholder="article, main, .content"
+                   class="w-full border rounded px-2 py-1 text-sm focus:outline-none" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-gray-500 mb-1">Exclude HTML tags (comma-separated, e.g. nav,footer,aside)</label>
+            <input id="scrape-exclude-tags" type="text" placeholder="nav, footer, aside, .ads"
+                   class="w-full border rounded px-2 py-1 text-sm focus:outline-none" />
+          </div>
+        </div>
+      </details>
+      <div id="scrape-status" class="text-sm text-gray-500 mb-3 hidden"></div>
+      <div id="scrape-result" class="hidden">
+        <div class="bg-white border rounded-lg p-4 mb-3">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-700">Summary</h3>
+            <button id="scraper-ingest-btn" onclick="ingestScraped()"
+                    class="text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100">
+              + Add to RAG Index
+            </button>
+          </div>
+          <div id="scrape-summary" class="text-sm text-gray-800 whitespace-pre-line"></div>
+        </div>
+        <details class="bg-gray-50 border rounded-lg p-3">
+          <summary class="text-xs font-medium text-gray-500 cursor-pointer">Raw scraped text</summary>
+          <pre id="scrape-raw" class="text-xs text-gray-600 mt-2 max-h-64 overflow-y-auto"></pre>
+        </details>
+      </div>
+    </div>
+
+    <!-- ── Crawl mode ── -->
+    <div id="scraper-panel-crawl" class="scraper-panel hidden">
+      <p class="text-xs text-gray-400 mb-3">Recursively crawl a site and collect multiple pages as markdown. Useful for documentation sites, wikis, or product pages.</p>
+      <div class="flex gap-2 mb-2 flex-wrap">
+        <input id="crawl-url" type="url" placeholder="https://docs.example.com"
+               class="flex-1 min-w-60 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+               onkeydown="if(event.key==='Enter') runCrawl()" />
+        <div class="flex items-center gap-1 border rounded px-3 py-2 bg-white">
+          <span class="text-xs text-gray-500 whitespace-nowrap">Depth</span>
+          <input id="crawl-depth" type="number" value="2" min="1" max="10"
+                 class="w-10 text-sm focus:outline-none text-center" title="Max link depth from start URL" />
+        </div>
+        <div class="flex items-center gap-1 border rounded px-3 py-2 bg-white">
+          <span class="text-xs text-gray-500 whitespace-nowrap">Max pages</span>
+          <input id="crawl-limit" type="number" value="10" min="1" max="100"
+                 class="w-12 text-sm focus:outline-none text-center" />
+        </div>
+        <button onclick="runCrawl()"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Crawl</button>
+      </div>
+      <div id="crawl-status" class="text-sm text-gray-500 mb-3 hidden"></div>
+      <div id="crawl-result" class="hidden space-y-2">
+        <div class="flex items-center justify-between">
+          <p id="crawl-summary-line" class="text-sm text-gray-600"></p>
+          <button id="crawl-ingest-btn" onclick="ingestCrawl()"
+                  class="text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100">
+            + Add all to RAG Index
+          </button>
+        </div>
+        <div id="crawl-pages" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- ── Map mode ── -->
+    <div id="scraper-panel-map" class="scraper-panel hidden">
+      <p class="text-xs text-gray-400 mb-3">Discover all URLs on a site without downloading content. Useful for understanding site structure before crawling.</p>
+      <div class="flex gap-2 mb-2 flex-wrap">
+        <input id="map-url" type="url" placeholder="https://example.com"
+               class="flex-1 min-w-60 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+               onkeydown="if(event.key==='Enter') runMap()" />
+        <div class="flex items-center gap-1 border rounded px-3 py-2 bg-white">
+          <span class="text-xs text-gray-500 whitespace-nowrap">Max URLs</span>
+          <input id="map-limit" type="number" value="50" min="1" max="500"
+                 class="w-14 text-sm focus:outline-none text-center" />
+        </div>
+        <button onclick="runMap()"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Map</button>
+      </div>
+      <div class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
+        <strong>Note:</strong> Map works best on sites with a <code>sitemap.xml</code>.
+        Sites without one may return only the root URL.
+        For full link discovery on any site, use <strong>Crawl</strong> mode instead.
+      </div>
+      <div id="map-status" class="text-sm text-gray-500 mb-3 hidden"></div>
+      <div id="map-result" class="hidden">
+        <div class="flex items-center justify-between mb-2">
+          <p id="map-summary-line" class="text-sm text-gray-600"></p>
+          <button id="map-switch-crawl" onclick="switchMapToCrawl()" class="hidden text-xs bg-blue-50 border border-blue-200 text-blue-600 px-3 py-1 rounded hover:bg-blue-100">
+            Switch to Crawl &rarr;
+          </button>
+        </div>
+        <div id="map-empty-hint" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700 mb-3">
+          <p class="font-medium mb-1">No URLs discovered via sitemap.</p>
+          <p class="text-xs">This site either has no <code>sitemap.xml</code> or it&#x2019;s not accessible.
+             Switch to <strong>Crawl</strong> mode to discover links by following page links instead.</p>
+          <button onclick="switchMapToCrawl()" class="mt-2 text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">
+            Switch to Crawl with this URL &rarr;
+          </button>
+        </div>
+        <!-- Batch scrape controls (shown after map results) -->
+        <div id="map-batch-controls" class="hidden mt-3 bg-gray-50 border rounded-lg p-3 space-y-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-medium text-gray-600">Batch Scrape URLs:</span>
+            <input id="map-filter" type="text" placeholder="Filter URLs (e.g. /capabilities/devvit)"
+                   class="flex-1 min-w-48 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+                   oninput="applyMapFilter()" />
+            <span id="map-filter-count" class="text-xs text-gray-400"></span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <input id="map-batch-limit" type="number" value="20" min="1" max="30"
+                   class="w-16 border rounded px-2 py-1 text-xs focus:outline-none text-center"
+                   title="Max URLs to scrape (max 30)" />
+            <label class="text-xs text-gray-500">max URLs (30 limit)</label>
+            <button onclick="runBatchScrape()"
+                    class="bg-purple-600 text-white px-3 py-1.5 rounded text-xs hover:bg-purple-700">
+              Batch Scrape Filtered
+            </button>
+            <button id="map-batch-ingest-btn" onclick="ingestBatch()" class="hidden text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100">
+              + Add all to RAG Index
+            </button>
+          </div>
+          <div id="map-batch-status" class="text-xs text-gray-500 hidden"></div>
+          <div id="map-batch-result" class="hidden space-y-1"></div>
+        </div>
+
+        <div class="bg-white border rounded-lg overflow-hidden mt-2">
+          <div id="map-links" class="max-h-72 overflow-y-auto divide-y text-xs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Extract mode ── -->
+    <div id="scraper-panel-extract" class="scraper-panel hidden">
+      <p class="text-xs text-gray-400 mb-3">Use an LLM to extract structured information from one or more URLs. Provide a plain-English prompt describing what to extract.</p>
+      <textarea id="extract-urls" rows="3" placeholder="https://example.com/product/123&#10;https://example.com/product/456"
+                class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 font-mono resize-y"></textarea>
+      <textarea id="extract-prompt" rows="3" placeholder="Extract: product name, price, rating, key features, and availability status."
+                class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 resize-y"></textarea>
+      <button onclick="runExtract()"
+              class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Extract</button>
+      <div id="extract-status" class="text-sm text-gray-500 mt-3 hidden"></div>
+      <div id="extract-result" class="hidden mt-3">
+        <div class="bg-white border rounded-lg p-4">
+          <h3 class="text-sm font-semibold text-gray-700 mb-2">Extracted Data</h3>
+          <pre id="extract-data" class="text-xs text-gray-700 overflow-x-auto max-h-96 overflow-y-auto"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Places ── -->
+  <div id="tab-places" class="tab-pane" data-log-tab="places">
+    <h2 class="text-base font-semibold mb-4">Google Places Search</h2>
+    <div class="flex flex-col gap-2 mb-4">
+      <input id="places-query" type="text" placeholder="What are you looking for?  e.g. anime stores"
+             class="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+             onkeydown="if(event.key==='Enter') runPlaces()" />
+      <div class="flex gap-2 flex-wrap">
+        <input id="places-location" type="text" placeholder="Where?  e.g. Akihabara, Tokyo"
+               class="flex-1 min-w-40 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+               onkeydown="if(event.key==='Enter') runPlaces()" />
+        <input id="places-radius" type="number" value="5000" placeholder="Radius (m)"
+               class="w-28 border rounded px-3 py-2 text-sm focus:outline-none" title="Search radius in metres" />
+        <div class="flex items-center gap-1 border rounded px-3 py-2 bg-white">
+          <span class="text-xs text-gray-500 whitespace-nowrap">Min rating</span>
+          <input id="places-min-rating" type="number" min="1" max="5" step="0.1" placeholder="e.g. 4.7"
+                 class="w-16 text-sm focus:outline-none text-right" />
+        </div>
+        <button onclick="runPlaces()"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Search</button>
+      </div>
+    </div>
+    <div id="places-status" class="text-sm text-gray-500 mb-3 hidden"></div>
+
+    <!-- Field reference -->
+    <details class="mb-4 border rounded-lg bg-gray-50">
+      <summary class="text-xs font-medium text-gray-500 px-3 py-2 cursor-pointer">Available data fields (click to expand)</summary>
+      <div class="p-3 text-xs text-gray-600 grid grid-cols-2 gap-x-6 gap-y-1">
+        <div><span class="font-medium text-green-700">displayName</span> — place name</div>
+        <div><span class="font-medium text-green-700">formattedAddress</span> — full address</div>
+        <div><span class="font-medium text-green-700">rating</span> — 1.0–5.0 star average</div>
+        <div><span class="font-medium text-green-700">userRatingCount</span> — number of reviews</div>
+        <div><span class="font-medium text-green-700">types</span> — place category tags</div>
+        <div><span class="font-medium text-green-700">primaryType</span> — main category</div>
+        <div><span class="font-medium text-green-700">googleMapsUri</span> — Maps link</div>
+        <div><span class="font-medium text-green-700">location</span> — lat/lng</div>
+        <div><span class="font-medium text-green-700">priceLevel</span> — $ to $$$$</div>
+        <div><span class="font-medium text-green-700">primaryTypeDisplayName</span> — readable category</div>
+        <div><span class="font-medium text-green-700">websiteUri</span> — business website</div>
+        <div><span class="font-medium text-green-700">nationalPhoneNumber</span> — local phone</div>
+        <div><span class="font-medium text-green-700">currentOpeningHours</span> — open now + hours</div>
+        <div><span class="font-medium text-green-700">businessStatus</span> — OPERATIONAL / CLOSED</div>
+        <div><span class="font-medium text-green-700">editorialSummary</span> — AI description</div>
+        <div><span class="font-medium text-green-700">photos</span> — photo references (up to 10)</div>
+        <div><span class="font-medium text-green-700">regularOpeningHours</span> — full weekly schedule</div>
+      </div>
+    </details>
+
+    <div id="places-results" class="space-y-3"></div>
+  </div>
+
+  <!-- ── Activity Log (shared, injected into each tab by JS) ── -->
+  <template id="activity-log-tpl">
+    <div class="activity-log mt-8 border-t pt-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Activity Log</span>
+        <div class="flex gap-2">
+          <span class="activity-log-count text-xs text-gray-400"></span>
+          <button class="activity-log-clear text-xs text-gray-400 hover:text-red-500">Clear</button>
+        </div>
+      </div>
+      <div class="activity-log-body bg-gray-950 rounded-lg p-3 font-mono text-xs text-gray-300 max-h-96 overflow-y-auto space-y-1">
+        <div class="activity-log-empty text-gray-600 italic">No transactions yet. Run an operation above.</div>
+      </div>
+    </div>
+  </template>
+
+</main>
+
+<script>
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'border-b-2', 'border-blue-500', 'text-blue-600'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active', 'border-b-2', 'border-blue-500', 'text-blue-600');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'documents') loadDocs();
+  });
+});
+
+// ── Health ─────────────────────────────────────────────────────────────────
+async function loadHealth() {
+  const grid = document.getElementById('health-grid');
+  grid.innerHTML = '<div class="text-gray-400 text-sm col-span-3">Checking...</div>';
+  try {
+    const res = await fetch('/api/health');
+    const data = await res.json();
+    grid.innerHTML = data.map(s => {
+      const ok = s.ok === true;
+      const unknown = s.ok === null;
+      const dot = unknown ? 'bg-gray-300' : ok ? 'bg-green-400' : 'bg-red-400';
+      const label = unknown ? 'Unknown' : ok ? 'OK' : 'Error';
+      const latency = s.latency_ms != null ? `${s.latency_ms}ms` : '—';
+      const err = s.detail && s.detail.error ? `<p class="text-xs text-red-500 mt-1">${s.detail.error}</p>` : '';
+      return `
+        <div class="bg-white border rounded-lg p-4 shadow-sm">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2.5 h-2.5 rounded-full ${dot}"></span>
+            <span class="font-medium text-sm">${s.service}</span>
+            <span class="ml-auto text-xs text-gray-400">${label}</span>
+          </div>
+          <p class="text-xs text-gray-400">Latency: ${latency}</p>
+          ${err}
+        </div>`;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = `<div class="text-red-500 text-sm col-span-3">Health check failed: ${e.message}</div>`;
+  }
+}
+loadHealth();
+setInterval(loadHealth, 30000);
+
+// ── Documents ──────────────────────────────────────────────────────────────
+async function loadDocs() {
+  const el = document.getElementById('doc-list');
+  el.innerHTML = '<div class="text-gray-400 text-sm">Loading...</div>';
+  const res  = await fetch('/api/documents');
+  const docs = await res.json();
+  if (!docs.length) {
+    el.innerHTML = '<p class="text-gray-400 text-sm">No documents indexed yet.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="w-full text-sm border-collapse">
+      <thead><tr class="text-left text-xs text-gray-500 border-b">
+        <th class="pb-2 pr-4">Filename</th>
+        <th class="pb-2 pr-4">Chunks</th>
+        <th class="pb-2 pr-4">Uploaded</th>
+        <th class="pb-2"></th>
+      </tr></thead>
+      <tbody>
+        ${docs.map(d => `
+          <tr class="border-b last:border-0 hover:bg-gray-50">
+            <td class="py-2 pr-4 font-medium">${d.filename}</td>
+            <td class="py-2 pr-4 text-gray-500">${d.chunk_count}</td>
+            <td class="py-2 pr-4 text-gray-400 text-xs">${d.uploaded_at.slice(0,19).replace('T',' ')}</td>
+            <td class="py-2">
+              <button onclick="deleteDoc('${d.doc_id}','${d.filename}')"
+                      class="text-xs text-red-400 hover:text-red-600">Delete</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function uploadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('upload-status');
+  status.className = 'text-sm mb-4 text-blue-600';
+  status.textContent = `Uploading and indexing ${file.name}...`;
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res  = await fetch('/api/documents/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) {
+      status.className = 'text-sm mb-4 text-red-600';
+      status.textContent = `Error: ${data.detail}`;
+    } else {
+      status.className = 'text-sm mb-4 text-green-600';
+      status.textContent = `Indexed ${data.filename} — ${data.chunk_count} chunks created.`;
+      loadDocs();
+    }
+  } catch (e) {
+    status.className = 'text-sm mb-4 text-red-600';
+    status.textContent = `Upload failed: ${e.message}`;
+  }
+  input.value = '';
+}
+
+async function deleteDoc(docId, filename) {
+  if (!confirm(`Delete "${filename}" from the index?`)) return;
+  await fetch(`/api/documents/${docId}`, { method: 'DELETE' });
+  loadDocs();
+}
+
+// Drag and drop
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-blue-400','bg-blue-50'); });
+dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('border-blue-400','bg-blue-50'); });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('border-blue-400','bg-blue-50');
+  const fi = document.getElementById('file-input');
+  fi.files = e.dataTransfer.files;
+  uploadFile(fi);
+});
+
+// ── RAG Chat ───────────────────────────────────────────────────────────────
+async function sendRagQuery() {
+  const input    = document.getElementById('rag-input');
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+
+  const thread = document.getElementById('chat-thread');
+
+  // User bubble
+  thread.insertAdjacentHTML('beforeend', `
+    <div class="flex justify-end">
+      <div class="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-xl text-sm">${escHtml(question)}</div>
+    </div>`);
+
+  // Thinking placeholder
+  const thinkId = 'think-' + Date.now();
+  thread.insertAdjacentHTML('beforeend', `
+    <div id="${thinkId}" class="flex justify-start">
+      <div class="bg-white border rounded-lg px-4 py-2 text-sm text-gray-400">Thinking...</div>
+    </div>`);
+  thread.scrollTop = thread.scrollHeight;
+
+  try {
+    const res  = await fetch('/api/rag/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    const sources = (data.sources || []).map((s, i) => `
+      <div class="source-chunk bg-gray-50 rounded p-3 text-xs mt-2">
+        <p class="font-medium text-gray-600">${i+1}. ${escHtml(s.filename)} — chunk ${s.chunk_index+1}
+          <span class="text-gray-400">(score: ${s.score})</span></p>
+        <p class="text-gray-500 mt-1 line-clamp-3">${escHtml(s.chunk_text.slice(0,300))}${s.chunk_text.length>300?'…':''}</p>
+      </div>`).join('');
+
+    const sourcesBlock = data.sources && data.sources.length
+      ? `<details class="mt-2"><summary class="text-xs text-blue-500 cursor-pointer">Source chunks (${data.sources.length})</summary>${sources}</details>`
+      : '<p class="text-xs text-gray-400 mt-1">No grounding sources.</p>';
+
+    document.getElementById(thinkId).outerHTML = `
+      <div class="flex justify-start">
+        <div class="bg-white border rounded-lg px-4 py-3 max-w-xl text-sm shadow-sm">
+          <p class="whitespace-pre-line">${escHtml(data.answer)}</p>
+          ${sourcesBlock}
+        </div>
+      </div>`;
+  } catch (e) {
+    document.getElementById(thinkId).outerHTML = `
+      <div class="flex justify-start">
+        <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-600">Error: ${escHtml(e.message)}</div>
+      </div>`;
+  }
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function clearChat() {
+  document.getElementById('chat-thread').innerHTML = '';
+}
+
+// ── Quick test presets ──────────────────────────────────────────────────────
+function quickTest(mode, url) {
+  // Close the details dropdown
+  document.querySelectorAll('details').forEach(d => d.removeAttribute('open'));
+
+  // Switch to the correct mode tab
+  document.querySelectorAll('.scraper-mode-btn').forEach(b => {
+    b.classList.remove('active', 'bg-white', 'shadow-sm');
+    b.classList.add('text-gray-500');
+  });
+  const modeBtn = document.querySelector(`.scraper-mode-btn[data-mode="${mode}"]`);
+  if (modeBtn) {
+    modeBtn.classList.add('active', 'bg-white', 'shadow-sm');
+    modeBtn.classList.remove('text-gray-500');
+  }
+  document.querySelectorAll('.scraper-panel').forEach(p => p.classList.add('hidden'));
+  const panel = document.getElementById(`scraper-panel-${mode}`);
+  if (panel) panel.classList.remove('hidden');
+
+  // Pre-fill the URL field and set sensible defaults for the preset
+  if (mode === 'scrape') {
+    document.getElementById('scrape-url').value = url;
+  } else if (mode === 'crawl') {
+    document.getElementById('crawl-url').value   = url;
+    document.getElementById('crawl-depth').value = '3';
+    document.getElementById('crawl-limit').value = url.includes('/docs/capabilities') ? '30' : '50';
+  } else if (mode === 'map') {
+    document.getElementById('map-url').value   = url;
+    document.getElementById('map-limit').value = '200';
+  } else if (mode === 'extract') {
+    document.getElementById('extract-urls').value  = url;
+    document.getElementById('extract-prompt').value =
+      'Extract all configuration properties for Devvit web. For each property include: ' +
+      'name, type, default value, whether it is required, and a description of what it controls. ' +
+      'Also note any related hooks, callbacks, or lifecycle methods mentioned on the page.';
+  }
+}
+
+// ── Scraper: mode switcher ──────────────────────────────────────────────────
+document.querySelectorAll('.scraper-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.scraper-mode-btn').forEach(b => {
+      b.classList.remove('active', 'bg-white', 'shadow-sm');
+      b.classList.add('text-gray-500');
+    });
+    btn.classList.add('active', 'bg-white', 'shadow-sm');
+    btn.classList.remove('text-gray-500');
+    document.querySelectorAll('.scraper-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('scraper-panel-' + btn.dataset.mode).classList.remove('hidden');
+  });
+});
+
+// ── Scraper: single-page scrape ─────────────────────────────────────────────
+let _lastScrapedContent  = '';
+let _lastScrapedFilename = '';
+
+async function runScrape() {
+  const url         = document.getElementById('scrape-url').value.trim();
+  const waitForMs   = document.getElementById('scrape-wait').value.trim();
+  const includeTags = document.getElementById('scrape-include-tags').value.trim();
+  const excludeTags = document.getElementById('scrape-exclude-tags').value.trim();
+  const status      = document.getElementById('scrape-status');
+  const result      = document.getElementById('scrape-result');
+  if (!url) return;
+
+  _lastScrapedContent  = '';
+  _lastScrapedFilename = '';
+  status.className = 'text-sm text-blue-600';
+  status.textContent = 'Scraping... (may take 10-30s)';
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  const payload = { url };
+  if (waitForMs)   payload.wait_for_ms   = parseInt(waitForMs);
+  if (includeTags) payload.include_tags  = includeTags;
+  if (excludeTags) payload.exclude_tags  = excludeTags;
+
+  try {
+    const res  = await fetch('/api/scraper/scrape', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    _lastScrapedContent  = data.raw;
+    _lastScrapedFilename = url.replace(/^https?:\/\//, '').replace(/[^a-z0-9]/gi, '_').slice(0, 60) + '.md';
+
+    document.getElementById('scrape-summary').textContent = data.summary;
+    document.getElementById('scrape-raw').textContent     = data.raw;
+    document.getElementById('scraper-ingest-btn').textContent = '+ Add to RAG Index';
+    document.getElementById('scraper-ingest-btn').disabled = false;
+    document.getElementById('scraper-ingest-btn').className = 'text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100';
+    result.classList.remove('hidden');
+    status.classList.add('hidden');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+async function ingestScraped() {
+  if (!_lastScrapedContent) return;
+  const btn = document.getElementById('scraper-ingest-btn');
+  btn.textContent = 'Indexing...';
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/scraper/ingest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: _lastScrapedContent, filename: _lastScrapedFilename }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    btn.textContent = `Indexed (${data.chunk_count} chunks)`;
+    btn.className = 'text-xs bg-gray-100 border text-gray-500 px-3 py-1 rounded cursor-default';
+  } catch (e) {
+    btn.textContent = `Failed: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+// ── Scraper: crawl ──────────────────────────────────────────────────────────
+let _crawlCombined  = '';
+let _crawlFilename  = '';
+
+async function runCrawl() {
+  const url    = document.getElementById('crawl-url').value.trim();
+  const depth  = document.getElementById('crawl-depth').value || 2;
+  const limit  = document.getElementById('crawl-limit').value || 10;
+  const status = document.getElementById('crawl-status');
+  const result = document.getElementById('crawl-result');
+  if (!url) return;
+
+  _crawlCombined = '';
+  _crawlFilename = '';
+  status.className = 'text-sm text-blue-600';
+  status.textContent = `Crawling up to ${limit} pages (depth ${depth})... this may take a minute.`;
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/crawl', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, max_depth: parseInt(depth), limit: parseInt(limit) }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    _crawlCombined = data.combined_markdown || '';
+    _crawlFilename = url.replace(/^https?:\/\//, '').replace(/[^a-z0-9]/gi, '_').slice(0, 50) + '_crawl.md';
+
+    document.getElementById('crawl-summary-line').textContent =
+      `${data.total} page(s) crawled from ${url}`;
+
+    const ingestBtn = document.getElementById('crawl-ingest-btn');
+    ingestBtn.textContent = '+ Add all to RAG Index';
+    ingestBtn.disabled = false;
+    ingestBtn.className = 'text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100';
+
+    document.getElementById('crawl-pages').innerHTML = (data.pages || []).map((p, i) => `
+      <details class="bg-white border rounded-lg">
+        <summary class="px-4 py-2 cursor-pointer text-sm flex justify-between items-center">
+          <span class="font-medium truncate max-w-lg">${escHtml(p.title || p.url)}</span>
+          <span class="text-xs text-gray-400 ml-2 flex-shrink-0">${p.chars.toLocaleString()} chars</span>
+        </summary>
+        <div class="px-4 pb-3">
+          <p class="text-xs text-gray-400 mb-2">${escHtml(p.url)}</p>
+          <pre class="text-xs text-gray-600 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded">${escHtml((p.markdown || '').slice(0, 1000))}${(p.markdown||'').length > 1000 ? '\n…' : ''}</pre>
+        </div>
+      </details>`).join('');
+
+    result.classList.remove('hidden');
+    status.classList.add('hidden');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+async function ingestCrawl() {
+  if (!_crawlCombined) return;
+  const btn = document.getElementById('crawl-ingest-btn');
+  btn.textContent = 'Indexing...';
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/scraper/ingest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: _crawlCombined, filename: _crawlFilename }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    btn.textContent = `Indexed (${data.chunk_count} chunks)`;
+    btn.className = 'text-xs bg-gray-100 border text-gray-500 px-3 py-1 rounded cursor-default';
+  } catch (e) {
+    btn.textContent = `Failed: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+// ── Scraper: map ────────────────────────────────────────────────────────────
+async function runMap() {
+  const url    = document.getElementById('map-url').value.trim();
+  const limit  = document.getElementById('map-limit').value || 50;
+  const status = document.getElementById('map-status');
+  const result = document.getElementById('map-result');
+  if (!url) return;
+
+  status.className = 'text-sm text-blue-600';
+  status.textContent = 'Mapping site URLs...';
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/map', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, limit: parseInt(limit) }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    document.getElementById('map-summary-line').textContent =
+      `${data.total} URL(s) discovered on ${url}`;
+
+    const emptyHint    = document.getElementById('map-empty-hint');
+    const switchBtn    = document.getElementById('map-switch-crawl');
+    const linksEl      = document.getElementById('map-links');
+    const batchControls = document.getElementById('map-batch-controls');
+    const fewResults   = data.total <= 1;
+
+    emptyHint.classList.toggle('hidden', !fewResults);
+    switchBtn.classList.toggle('hidden', fewResults || data.total < 5);
+    batchControls.classList.toggle('hidden', fewResults);
+
+    // Store all links for filter/batch
+    _allMapLinks = data.links || [];
+    document.getElementById('map-filter').value = '';
+    document.getElementById('map-batch-result').classList.add('hidden');
+    document.getElementById('map-batch-status').classList.add('hidden');
+    document.getElementById('map-batch-ingest-btn').classList.add('hidden');
+    applyMapFilter();
+
+    // Store the URL for switchMapToCrawl
+    linksEl.dataset.sourceUrl = url;
+    result.classList.remove('hidden');
+    status.classList.add('hidden');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    const mapUrl = document.getElementById('map-url').value.trim();
+    const errMsg = e.message || '';
+    // Surface sitemap hint alongside error so user knows to use crawl instead
+    const sitemapHint = errMsg.match(/500|sitemap|search|supabase|serper/i)
+      ? `<br/><span class="text-xs text-amber-700">Tip: this site may not have a sitemap.xml. Use <button onclick="switchMapToCrawl()" class="underline font-medium">Crawl mode</button> to discover links instead.</span>`
+      : '';
+    status.innerHTML = `Error: ${escHtml(errMsg)}${sitemapHint}`;
+  }
+}
+
+// ── Map: filter + batch scrape ───────────────────────────────────────────────
+
+let _allMapLinks  = [];
+let _batchCombined = '';
+let _batchFilename = '';
+
+function applyMapFilter() {
+  const filter  = (document.getElementById('map-filter').value || '').toLowerCase();
+  const linksEl = document.getElementById('map-links');
+  const countEl = document.getElementById('map-filter-count');
+  const visible = _allMapLinks.filter(l => !filter || l.toLowerCase().includes(filter));
+  linksEl.innerHTML = visible.map(link => `
+    <div class="px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2">
+      <span class="text-gray-300">&#8594;</span>
+      <a href="${escHtml(link)}" target="_blank"
+         class="text-blue-500 hover:underline truncate">${escHtml(link)}</a>
+    </div>`).join('');
+  const limit = parseInt(document.getElementById('map-batch-limit').value || 20);
+  countEl.textContent = `${visible.length} shown / ${_allMapLinks.length} total`;
+}
+
+async function runBatchScrape() {
+  const filter  = (document.getElementById('map-filter').value || '').toLowerCase();
+  const limit   = parseInt(document.getElementById('map-batch-limit').value || 20);
+  const urls    = _allMapLinks.filter(l => !filter || l.toLowerCase().includes(filter)).slice(0, limit);
+  const status  = document.getElementById('map-batch-status');
+  const result  = document.getElementById('map-batch-result');
+  const ingestBtn = document.getElementById('map-batch-ingest-btn');
+
+  if (!urls.length) { alert('No URLs match the current filter.'); return; }
+
+  _batchCombined = '';
+  _batchFilename = '';
+  status.className   = 'text-xs text-blue-600';
+  status.textContent = `Scraping ${urls.length} URL(s) one at a time... (this may take a while)`;
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+  ingestBtn.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/batch_scrape', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, max_urls: limit }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    _batchCombined = data.combined_markdown || '';
+    _batchFilename = 'devvit_docs_batch.md';
+
+    status.textContent = `Done: ${data.succeeded}/${data.total} scraped successfully` +
+      (data.failed ? ` (${data.failed} failed)` : '');
+    status.className = data.failed ? 'text-xs text-amber-600' : 'text-xs text-green-600';
+
+    result.innerHTML = (data.results || []).map(r => `
+      <div class="flex items-center gap-2 px-2 py-1 rounded ${r.ok ? 'bg-green-50' : 'bg-red-50'}">
+        <span class="${r.ok ? 'text-green-500' : 'text-red-400'}">${r.ok ? '&#10003;' : '&#10007;'}</span>
+        <span class="truncate text-gray-600 flex-1">${escHtml(r.title || r.url)}</span>
+        <span class="text-gray-400 flex-shrink-0">${r.ok ? r.chars.toLocaleString() + ' chars' : escHtml(r.error || 'failed')}</span>
+      </div>`).join('');
+    result.classList.remove('hidden');
+
+    if (_batchCombined) {
+      ingestBtn.textContent = '+ Add all to RAG Index';
+      ingestBtn.disabled = false;
+      ingestBtn.className = 'text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded hover:bg-green-100';
+      ingestBtn.classList.remove('hidden');
+    }
+  } catch (e) {
+    status.className = 'text-xs text-red-600';
+    status.textContent = `Batch scrape error: ${e.message}`;
+  }
+}
+
+async function ingestBatch() {
+  if (!_batchCombined) return;
+  const btn = document.getElementById('map-batch-ingest-btn');
+  btn.textContent = 'Indexing...';
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/scraper/ingest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: _batchCombined, filename: _batchFilename }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    btn.textContent = `Indexed (${data.chunk_count} chunks)`;
+    btn.className = 'text-xs bg-gray-100 border text-gray-500 px-3 py-1 rounded cursor-default';
+  } catch (e) {
+    btn.textContent = `Failed: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+function switchMapToCrawl() {
+  const mapUrlEl  = document.getElementById('map-url');
+  const linksEl   = document.getElementById('map-links');
+  const sourceUrl = (mapUrlEl && mapUrlEl.value.trim()) ||
+                    (linksEl && linksEl.dataset.sourceUrl) || '';
+  quickTest('crawl', sourceUrl || '');
+}
+
+// ── Scraper: extract ────────────────────────────────────────────────────────
+async function runExtract() {
+  const urlsRaw = document.getElementById('extract-urls').value.trim();
+  const prompt  = document.getElementById('extract-prompt').value.trim();
+  const status  = document.getElementById('extract-status');
+  const result  = document.getElementById('extract-result');
+
+  if (!urlsRaw) { alert('Enter at least one URL'); return; }
+  if (!prompt)  { alert('Enter an extraction prompt'); return; }
+
+  const urls = urlsRaw.split('\n').map(u => u.trim()).filter(Boolean);
+
+  status.className = 'text-sm text-blue-600';
+  status.textContent = `Extracting from ${urls.length} URL(s)... (may take 30-60s per URL)`;
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+
+  try {
+    const res  = await fetch('/api/scraper/extract', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, prompt }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    document.getElementById('extract-data').textContent =
+      JSON.stringify(data.data, null, 2);
+    result.classList.remove('hidden');
+    status.classList.add('hidden');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+// ── Places ─────────────────────────────────────────────────────────────────
+async function runPlaces() {
+  const query     = document.getElementById('places-query').value.trim();
+  const location  = document.getElementById('places-location').value.trim();
+  const radius    = document.getElementById('places-radius').value || 5000;
+  const minRating = document.getElementById('places-min-rating').value;
+  const status    = document.getElementById('places-status');
+  const results   = document.getElementById('places-results');
+
+  if (!query)    { alert('Enter what you are looking for'); return; }
+  if (!location) { alert('Enter a location (e.g. Tokyo, Japan)'); return; }
+
+  status.className = 'text-sm text-blue-600';
+  status.textContent = `Locating "${location}" and searching...`;
+  status.classList.remove('hidden');
+  results.innerHTML = '';
+
+  const payload = { query, location, radius_m: parseInt(radius), max_results: 10 };
+  if (minRating) payload.min_rating = parseFloat(minRating);
+
+  try {
+    const res  = await fetch('/api/places/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    const places = data.places || [];
+    const loc    = data.resolved_location;
+    let statusText = `${data.after_filter} result(s) near ${location} (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})`;
+    if (data.min_rating_applied != null)
+      statusText += ` — filtered to >= ${data.min_rating_applied} stars (from ${data.total_fetched} candidates)`;
+    status.textContent = statusText;
+    status.className   = 'text-sm text-gray-500';
+
+    if (!places.length) {
+      results.innerHTML = `<p class="text-gray-400 text-sm">No results${data.min_rating_applied ? ` with rating >= ${data.min_rating_applied}` : ''} in this area. Try lowering the rating filter or increasing the radius.</p>`;
+      return;
+    }
+
+    results.innerHTML = places.map((p, i) => {
+      const name     = p.displayName?.text || p.displayName || 'Unknown';
+      const addr     = p.formattedAddress  || '';
+      const mapsUrl  = p.googleMapsUri     || '#';
+      const rating   = p.rating   != null ? p.rating   : null;
+      const rCount   = p.userRatingCount   || 0;
+      const pTypeDisp = p.primaryTypeDisplayName?.text || (p.primaryType || '').replace(/_/g,' ');
+      const types    = (p.types || []).filter(t => !['establishment','point_of_interest'].includes(t));
+      const website  = p.websiteUri         || '';
+      const phone    = p.nationalPhoneNumber|| '';
+      const status   = p.businessStatus     || '';
+      const price    = p.priceLevel         || '';
+      const summary  = p.editorialSummary?.text || p.editorialSummary || '';
+      const hours     = p.currentOpeningHours || null;
+      const photos    = p.photos || [];
+      const weekHours = p.regularOpeningHours?.weekdayDescriptions || [];
+
+      const ratingHtml = rating != null
+        ? `<span class="font-bold text-yellow-600">${rating}</span><span class="text-gray-400 text-xs"> / 5 &nbsp;(${rCount.toLocaleString()} reviews)</span>`
+        : '<span class="text-gray-400 text-xs">No rating</span>';
+
+      const starsHtml = rating != null ? renderStars(rating) : '';
+
+      const priceLevelMap = {
+        PRICE_LEVEL_FREE: 'Free', PRICE_LEVEL_INEXPENSIVE: '$',
+        PRICE_LEVEL_MODERATE: '$$', PRICE_LEVEL_EXPENSIVE: '$$$',
+        PRICE_LEVEL_VERY_EXPENSIVE: '$$$$'
+      };
+      const priceHtml = price && priceLevelMap[price]
+        ? `<span class="text-xs bg-gray-100 text-gray-600 border rounded px-1.5 py-0.5 font-medium">${priceLevelMap[price]}</span>`
+        : '';
+
+      const statusHtml = status && status !== 'OPERATIONAL'
+        ? `<span class="text-xs bg-red-50 text-red-600 border border-red-100 rounded px-1.5 py-0.5">${status.replace(/_/g,' ').toLowerCase()}</span>`
+        : (status === 'OPERATIONAL' ? '<span class="text-xs text-green-600">Open for business</span>' : '');
+
+      const openNow = hours?.openNow;
+      const openHtml = openNow != null
+        ? `<span class="text-xs font-medium ${openNow ? 'text-green-600' : 'text-red-500'}">${openNow ? 'Open now' : 'Closed now'}</span>`
+        : '';
+
+      const typesHtml = types.length
+        ? `<div class="flex flex-wrap gap-1 mt-2">${types.slice(0,5).map(t =>
+            `<span class="text-xs bg-blue-50 text-blue-600 border border-blue-100 rounded px-1.5 py-0.5">${t.replace(/_/g,' ')}</span>`
+          ).join('')}</div>`
+        : '';
+
+      const summaryHtml = summary
+        ? `<p class="text-xs text-gray-500 italic mt-2">"${escHtml(summary)}"</p>`
+        : '';
+
+      const contactHtml = [
+        phone   ? `<span>&#128222; ${escHtml(phone)}</span>` : '',
+        website ? `<a href="${escHtml(website)}" target="_blank" class="text-blue-500 hover:underline truncate max-w-xs inline-block align-bottom">&#127760; ${escHtml(website.replace(/^https?:\/\//,'').split('/')[0])}</a>` : '',
+      ].filter(Boolean).join('<span class="text-gray-300 mx-1">|</span>');
+
+      const photosHtml = photos.length
+        ? `<div class="flex gap-2 overflow-x-auto mt-3 pb-1">
+            ${photos.slice(0, 6).map(ph =>
+              `<img src="http://places.platform.ibbytech.com/v1/places/photo?name=${encodeURIComponent(ph.name)}&maxHeightPx=200&maxWidthPx=280"
+                    class="h-28 w-auto rounded object-cover flex-shrink-0 border border-gray-200" loading="lazy"
+                    onerror="this.style.display='none'" />`
+            ).join('')}
+          </div>`
+        : '';
+
+      const hoursHtml = weekHours.length
+        ? `<details class="mt-2">
+            <summary class="text-xs text-blue-500 cursor-pointer">Weekly hours</summary>
+            <div class="text-xs text-gray-600 mt-1 space-y-0.5 pl-2 border-l-2 border-blue-100">
+              ${weekHours.map(d => `<div>${escHtml(d)}</div>`).join('')}
+            </div>
+          </details>`
+        : '';
+
+      return `
+        <div class="bg-white border rounded-lg p-4 shadow-sm">
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center mt-0.5">${i+1}</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="font-semibold text-sm leading-tight">${escHtml(name)}</p>
+                  <p class="text-xs text-gray-400 mt-0.5">${escHtml(pTypeDisp)}</p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  <div>${ratingHtml}</div>
+                  <div class="text-xs mt-0.5">${starsHtml}</div>
+                </div>
+              </div>
+
+              <p class="text-xs text-gray-500 mt-1.5">${escHtml(addr)}</p>
+
+              ${summaryHtml}
+
+              <div class="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                ${openHtml}
+                ${priceHtml}
+                ${statusHtml}
+              </div>
+
+              ${typesHtml}
+
+              ${contactHtml ? `<div class="flex flex-wrap items-center gap-1 mt-2 text-xs text-gray-600">${contactHtml}</div>` : ''}
+
+              ${hoursHtml}
+
+              ${photosHtml}
+
+              <a href="${escHtml(mapsUrl)}" target="_blank"
+                 class="text-xs text-blue-500 hover:underline mt-2 inline-block">View on Google Maps &rarr;</a>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    status.className = 'text-sm text-red-600';
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+function renderStars(rating) {
+  const full  = Math.floor(rating);
+  const half  = (rating - full) >= 0.5;
+  const empty = 5 - full - (half ? 1 : 0);
+  return '<span class="text-yellow-400">' + '&#9733;'.repeat(full) +
+    (half ? '<span style="opacity:0.5">&#9733;</span>' : '') +
+    '<span class="text-gray-300">' + '&#9733;'.repeat(empty) + '</span></span>';
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Activity Log ────────────────────────────────────────────────────────────
+
+// Inject log panel into every tab that has data-log-tab
+document.querySelectorAll('.tab-pane[data-log-tab]').forEach(pane => {
+  const tpl   = document.getElementById('activity-log-tpl');
+  const clone = tpl.content.cloneNode(true);
+  const logEl = clone.querySelector('.activity-log');
+  logEl.dataset.tab = pane.dataset.logTab;
+
+  // Clear button wipes the visual log for this tab (does not delete the file)
+  clone.querySelector('.activity-log-clear').addEventListener('click', () => {
+    logEl.querySelector('.activity-log-body').innerHTML =
+      '<div class="activity-log-empty text-gray-600 italic">Log cleared. Next operation will appear here.</div>';
+    logEl.querySelector('.activity-log-count').textContent = '';
+  });
+
+  pane.appendChild(clone);
+});
+
+function _logColor(key) {
+  // Syntax-light coloring for JSON keys
+  const special = {ts:'text-gray-500', tab:'text-purple-400', op:'text-blue-300',
+                   latency_ms:'text-yellow-400', ok:'text-green-400', error:'text-red-400'};
+  return special[key] || 'text-cyan-300';
+}
+
+function _renderJson(obj, depth) {
+  if (depth === undefined) depth = 0;
+  if (obj === null)    return '<span class="text-gray-500">null</span>';
+  if (typeof obj === 'boolean') return `<span class="${obj ? 'text-green-400' : 'text-red-400'}">${obj}</span>`;
+  if (typeof obj === 'number')  return `<span class="text-yellow-300">${obj}</span>`;
+  if (typeof obj === 'string') {
+    const escaped = escHtml(obj);
+    // Truncate very long strings in the rendered view
+    const display = escaped.length > 400 ? escaped.slice(0, 400) +
+      `<span class="text-gray-600"> … [${escaped.length - 400} more]</span>` : escaped;
+    return `<span class="text-orange-300">"${display}"</span>`;
+  }
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return '<span class="text-gray-500">[]</span>';
+    const pad = '  '.repeat(depth + 1);
+    const items = obj.map(v => `${pad}${_renderJson(v, depth + 1)}`).join(',\n');
+    return `[\n${items}\n${'  '.repeat(depth)}]`;
+  }
+  if (typeof obj === 'object') {
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return '<span class="text-gray-500">{}</span>';
+    const pad   = '  '.repeat(depth + 1);
+    const lines = keys.map(k => {
+      const colorClass = depth === 0 ? _logColor(k) : 'text-cyan-300';
+      return `${pad}<span class="${colorClass}">"${escHtml(k)}"</span>: ${_renderJson(obj[k], depth + 1)}`;
+    }).join(',\n');
+    return `{\n${lines}\n${'  '.repeat(depth)}}`;
+  }
+  return String(obj);
+}
+
+function _renderRecord(rec) {
+  const ts   = rec.ts || '';
+  const op   = rec.op  || '?';
+  const tab  = rec.tab || '';
+  const ms   = rec.latency_ms != null ? `${rec.latency_ms}ms` : '';
+  const ok   = rec.ok !== false;
+  const statusDot  = ok ? 'bg-green-500' : 'bg-red-500';
+  const statusText = ok ? 'text-green-400' : 'text-red-400';
+
+  const id = 'tx-' + Math.random().toString(36).slice(2);
+  return `
+    <div class="border border-gray-800 rounded overflow-hidden">
+      <button onclick="document.getElementById('${id}').classList.toggle('hidden')"
+              class="w-full flex items-center gap-2 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-left">
+        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDot}"></span>
+        <span class="${statusText} font-semibold">${escHtml(op)}</span>
+        <span class="text-gray-500 text-xs ml-1">${escHtml(ts)}</span>
+        <span class="text-yellow-400 text-xs ml-auto">${escHtml(ms)}</span>
+        <span class="text-gray-600 text-xs ml-2">&#9660;</span>
+      </button>
+      <div id="${id}" class="hidden px-3 py-2 bg-gray-950 overflow-x-auto">
+        <pre class="text-xs leading-relaxed whitespace-pre-wrap">${_renderJson(rec, 0)}</pre>
+      </div>
+    </div>`;
+}
+
+async function refreshActivityLog(tabName) {
+  const logEl = document.querySelector(`.activity-log[data-tab="${tabName}"]`);
+  if (!logEl) return;
+
+  try {
+    const res     = await fetch(`/api/transactions?tab=${tabName}&limit=15`);
+    const records = await res.json();
+    const body    = logEl.querySelector('.activity-log-body');
+    const count   = logEl.querySelector('.activity-log-count');
+
+    if (!records.length) return;   // nothing new — don't overwrite a "cleared" state
+
+    count.textContent = `${records.length} record(s)`;
+    body.innerHTML = records.map(_renderRecord).join('');
+  } catch (e) {
+    // silently ignore — log fetch should never crash the UI
+  }
+}
+
+// Patch each operation function to refresh the log after it completes.
+// We wrap the existing functions by hooking into the fetch calls via a
+// thin wrapper on the response path — simplest approach without rewriting
+// all the operation handlers.
+function _withLog(tabName, fn) {
+  return async function(...args) {
+    try {
+      await fn.apply(this, args);
+    } finally {
+      // Small delay so the server has written the record before we read it
+      setTimeout(() => refreshActivityLog(tabName), 300);
+    }
+  };
+}
+
+// Wire up after DOMContentLoaded so all functions are defined
+window.addEventListener('load', () => {
+  // Documents tab
+  window.uploadFile     = _withLog('documents', uploadFile);
+  window.deleteDoc      = _withLog('documents', deleteDoc);
+  // RAG tab
+  window.sendRagQuery   = _withLog('rag',       sendRagQuery);
+  // Scraper tab — all modes
+  window.runScrape      = _withLog('scraper',   runScrape);
+  window.runCrawl       = _withLog('scraper',   runCrawl);
+  window.runMap         = _withLog('scraper',   runMap);
+  window.runExtract     = _withLog('scraper',   runExtract);
+  window.runBatchScrape = _withLog('scraper',   runBatchScrape);
+  window.ingestScraped  = _withLog('scraper',   ingestScraped);
+  window.ingestCrawl    = _withLog('scraper',   ingestCrawl);
+  window.ingestBatch    = _withLog('scraper',   ingestBatch);
+  // Places tab
+  window.runPlaces      = _withLog('places',    runPlaces);
+});
+</script>
+</body>
+</html>

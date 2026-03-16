@@ -4,12 +4,14 @@
 
 ### svcnode-01 (192.168.71.220)
 - Runs: Docker containers, Traefik reverse proxy, all API gateways and enterprise services
-- Does NOT: store persistent data, host application logic, run cron jobs
+- Does NOT: store application data, host platform application logic, run cron jobs
+- Note: `/opt/logstack/` stores Grafana Alloy + Loki log data on this node.
+  This is node-resident observability infrastructure, not platform application data.
 - Persona required: `devops-agent`
 - If a task asks you to store database data on svcnode-01 → HARD BLOCK (cross-node violation)
 
 ### dbnode-01 (192.168.71.221)
-- Runs: PostgreSQL `shogun_v1` exclusively
+- Runs: PostgreSQL 17.7 — six application databases (platform_v1, shogun_v1, mltrader, n8n, automation_sandbox_test) plus postgres system database
 - Does NOT: run Docker, host applications, serve APIs
 - Persona required: `dba-agent`
 - If a task asks you to run Docker on dbnode-01 → HARD BLOCK (cross-node violation)
@@ -76,7 +78,48 @@ paths as a pattern to follow.
 
 | Service | Actual Path | Node | Exception Reason |
 |:---|:---|:---|:---|
-| Firecrawl | `/opt/firecrawl` | svcnode-01 | Installed via upstream Docker Compose repo before path standard was codified. Root-owned `.env`. Migration risk exceeds benefit. Exception approved 2026-03-05. |
+| Firecrawl | `/opt/firecrawl` | svcnode-01 | Installed via upstream Docker Compose repo before path standard was codified. Migration risk exceeds benefit. Exception approved 2026-03-05. **Ownership:** devops-agent:devops-agent — transferred 2026-03-06. devops-agent can now read `.env` and run git commands. **Network:** firecrawl containers join `backend` Docker network only, NOT `platform_net`. Host port 3002 is the only access path. Scraper reaches firecrawl via `http://host.docker.internal:3002` (HOST_IP pattern, verified WORKING 2026-03-06). |
 
 **All new services must comply with the standard path.** This list is for
 legacy services only and will not grow without explicit sign-off.
+
+---
+
+## SSH Operation Zone Classification
+
+SSH commands to remote nodes follow the same zone model as git operations.
+Zone is determined by the nature of the command, not the node or persona.
+Persona assignment rules still apply in all zones.
+
+### Green Zone — Agent Acts Autonomously
+
+Read-only diagnostic commands. Zero state change, fully safe.
+
+- Container inspection: `docker ps`, `docker logs --tail N`, `docker inspect`
+- Service status: `systemctl status <name>`, `journalctl --tail N --no-pager`
+- File system reads: `ls`, `cat` on non-sensitive paths, `df -h`, `du -sh`
+- Process inspection: `ps aux`, `pgrep`, `top -bn1`
+- Network diagnostics: `curl -s <url>`, `ping -c 3`, `ss -tlnp`, `netstat`
+- Git read operations on remote checkouts: `git status`, `git log --oneline`
+- Environment verification: `echo $VAR` (do not log sensitive values)
+
+### Yellow Zone — Agent Proposes, Human Confirms
+
+Operational write commands. Reversible but affect running state.
+Under Session Autonomy Mode these proceed automatically with narration.
+
+- Container lifecycle: `docker restart`, `docker stop`, `docker start`
+- Service control: `systemctl restart`, `systemctl stop`, `systemctl start`
+- Compose operations: `docker-compose up -d`, `docker-compose restart`
+- Config file edits: any write to `.env`, `docker-compose.yml`, service configs
+- Remote git operations: `git pull`, `git checkout` on node checkouts
+
+### Red Zone — Human Only
+
+Destructive commands. Data loss possible. Agent stops and hands off completely.
+
+- `docker rm`, `docker rmi` — removes containers or images
+- `docker-compose down -v` — destroys volumes
+- `rm`, `rmdir` on any path on a remote node
+- Any destructive SQL — covered also by `05-database.md`
+- Any command the agent cannot fully characterize before running

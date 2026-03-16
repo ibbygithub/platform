@@ -1,0 +1,27 @@
+networks:
+  platform_net:
+    external: true
+    name: platform_net
+
+volumes:
+  valkey-data:
+    name: platform-valkey-data
+
+services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: platform-valkey
+    restart: unless-stopped
+
+    # requirepass — auth required for all connections
+    # appendonly yes — AOF persistence (survives restarts)
+    command: valkey-server --requirepass ${VALKEY_PASSWORD} --appendonly yes
+
+    ports:
+      - "127.0.0.1:6379:6379"   # Localhost only — lab nodes used FQDN via Pi-hole; laptop mode uses container name
+
+    volumes:
+      - valkey-data:/data
+
+    networks:
+      - platform_net

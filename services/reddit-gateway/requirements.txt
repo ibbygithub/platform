@@ -1,4 +1,6 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.9.2
-praw==7.8.1
+requests==2.32.3
+psycopg2-binary==2.9.10
+apscheduler==3.10.4

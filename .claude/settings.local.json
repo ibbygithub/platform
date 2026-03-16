@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git add services/scraper/api/app.py services/scraper/docker-compose.yml .claude/)"
-    ]
-  }
-}

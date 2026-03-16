@@ -64,6 +64,43 @@ result = llm_completion("Summarize the top 3 ramen shops in Osaka.", model="gpt-
 - **Grafana Dashboard:** Not yet configured
 - Token usage, model, latency, and cost are logged per request — critical for billing
 
+## Capabilities
+
+Capability registry for Stage 2 Part B (Capability Pre-check).
+
+| Capability | Our Endpoint | Provider(s) | Status | Last Verified |
+|:-----------|:-------------|:------------|:-------|:--------------|
+| Text embeddings (1536-dim) | `POST /v1/embeddings` | openai (text-embedding-3-small) | `implemented` | 2026-03-11 |
+| Text embeddings (768-dim) | `POST /v1/embeddings` | google (text-embedding-004) | `implemented` | 2026-03-11 |
+| Chat completion | `POST /v1/chat` | google (gemini-2.0-flash) — default | `implemented` | 2026-03-11 |
+| Chat completion | `POST /v1/chat` | openai (gpt-4o, gpt-4o-mini) | `implemented` | 2026-03-11 |
+| Chat completion | `POST /v1/chat` | anthropic (claude-sonnet-4-6, etc.) | `implemented` | 2026-03-11 |
+| Multi-turn conversation (system + user + assistant) | `POST /v1/chat` | all providers | `implemented` | 2026-03-11 |
+| Streaming responses | Not exposed | — | `not-available` | 2026-03-11 |
+| Function calling / tool use | Not exposed | — | `available-upstream` | 2026-03-11 |
+| Vision (image input) | Not exposed | — | `available-upstream` | 2026-03-11 |
+| Structured Loki logging (token usage, cost) | Not implemented | — | `not-available` | 2026-03-11 |
+
+**Status definitions:**
+- `implemented` — available and tested in the platform gateway
+- `available-upstream` — supported by provider APIs but not yet exposed in app.py
+- `not-available` — not implemented; no current plan
+
+**Observability gap (HIGH PRIORITY):** app.py has no Loki push code. Token usage,
+latency, and cost per provider cannot be monitored from Grafana. This is a billing
+visibility gap. Adding Loki logging to `/v1/chat` and `/v1/embeddings` is recommended
+as a priority follow-up task.
+
+**Default routing:** Google Gemini is the default chat provider (fastest, low cost).
+OpenAI is the default embed provider (1536-dim, pgvector compatible). Override with
+`provider` field in the request body.
+
+**Last Updated:** 2026-03-11 — Platform Test Standard Phase 3 applied. OpenAPI spec
+added at `services/llm-gateway/openapi.yaml`. Validate script added at
+`services/llm-gateway/validate_llm.py`.
+
+---
+
 ## Known Limitations / Quirks
 - Model availability depends on upstream provider API status
 - Token limits vary by model — check provider docs for context window size

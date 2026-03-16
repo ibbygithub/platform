@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 
 app = Flask(__name__)
 
@@ -78,6 +78,38 @@ def google_places_nearby_search(included_types, lat, lng, radius_m, max_results,
 @app.get("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.get("/v1/places/photo")
+def v1_places_photo():
+    """
+    Proxy a Google Places photo to the caller without exposing the API key.
+    Required param: name  -- the photo resource name from the places response
+                             e.g. places/ChIJ.../photos/AXCi2Q...
+    Optional params: maxHeightPx (default 600), maxWidthPx (default 800)
+    """
+    photo_name = request.args.get("name", "").strip()
+    max_h      = int(request.args.get("maxHeightPx", 600))
+    max_w      = int(request.args.get("maxWidthPx",  800))
+
+    if not photo_name:
+        return jsonify({"ok": False, "error": "Missing: name"}), 400
+
+    _require_api_key()
+
+    url    = f"{PLACES_API_BASE}/{photo_name}/media"
+    params = {"maxHeightPx": max_h, "maxWidthPx": max_w, "key": GOOGLE_API_KEY}
+
+    try:
+        r = requests.get(url, params=params, timeout=30)
+        if r.status_code >= 400:
+            return jsonify({"ok": False, "error": f"Google API returned {r.status_code}"}), r.status_code
+        return Response(
+            r.content,
+            content_type=r.headers.get("Content-Type", "image/jpeg"),
+        )
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.post("/v1/places/search_text")

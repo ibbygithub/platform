@@ -1,6 +1,7 @@
 const { Telegraf } = require("telegraf");
 const axios = require("axios");
 const crypto = require("crypto");
+const http = require("http");
 
 // ===== Env =====
 const BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
@@ -12,6 +13,12 @@ const TELEGRAM_MODE = (process.env.TELEGRAM_MODE || "polling").trim().toLowerCas
 const WEBHOOK_DOMAIN = (process.env.WEBHOOK_DOMAIN || "").trim();   // e.g. https://telegram.platform.ibbytech.com
 const WEBHOOK_PATH   = (process.env.WEBHOOK_PATH || "/webhook").trim();
 const WEBHOOK_PORT   = parseInt(process.env.WEBHOOK_PORT || "3000", 10);
+
+// Outbound send API — shared secret for /send endpoint
+// Set SEND_SECRET in .env. shogun-core must send X-Send-Secret header.
+// Leave empty to disable auth (not recommended outside dev).
+const SEND_SECRET    = (process.env.SEND_SECRET || "").trim();
+const SEND_API_PORT  = parseInt(process.env.SEND_API_PORT || "3001", 10);
 
 // Capability flags forwarded to upstream for policy decisions
 const CAP_CAN_SEARCH      = (process.env.CAP_CAN_SEARCH      || "false").trim().toLowerCase() === "true";
@@ -156,10 +163,9 @@ function voicePayload(msg) {
 // ===== Bot =====
 const bot = new Telegraf(BOT_TOKEN);
 
-bot.command("status", async (ctx) => {
-  if (!isAllowedCtx(ctx)) return;
-  await ctx.reply(`✅ gateway alive; mode=${TELEGRAM_MODE}`);
-});
+// NOTE: No bot.command() handlers here — all slash commands (/status, /help, etc.)
+// are forwarded to upstream (shogun-core) as kind=text envelopes.
+// Gateway health is available via GET /health on the send API port.
 
 bot.on("text", async (ctx) => {
   if (!isAllowedCtx(ctx)) return;
@@ -277,6 +283,95 @@ bot.on("edited_message", async (ctx) => {
     }
   }
 });
+
+
+// ===== Outbound Send API =====
+//
+// HTTP server on SEND_API_PORT (default 3001).
+// Exposes two endpoints:
+//
+//   GET  /health  — liveness check, returns gateway mode and uptime
+//   POST /send    — push a message to any allowed Telegram chat
+//
+// Auth: If SEND_SECRET is set, callers must include header:
+//   X-Send-Secret: <value>
+//
+// POST /send request body:
+//   { "chat_id": "123456789", "text": "Hello", "parse_mode": "Markdown" }
+//
+// parse_mode is optional. Supported values: "Markdown", "MarkdownV2", "HTML"
+//
+// POST /send response:
+//   { "ok": true,  "message_id": 99 }
+//   { "ok": false, "error": "..." }
+//
+// This endpoint is on platform_net only. shogun-core reaches it via
+// https://telegram.platform.ibbytech.com/send (through Traefik).
+
+const sendServer = http.createServer((req, res) => {
+  res.setHeader("Content-Type", "application/json");
+
+  // ── GET /health ──────────────────────────────────────────────────────────
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200);
+    res.end(JSON.stringify({
+      ok:      true,
+      mode:    TELEGRAM_MODE,
+      uptime:  process.uptime(),
+    }));
+    return;
+  }
+
+  // ── POST /send ───────────────────────────────────────────────────────────
+  if (req.method === "POST" && req.url === "/send") {
+    // Shared-secret auth
+    if (SEND_SECRET) {
+      const provided = (req.headers["x-send-secret"] || "").trim();
+      if (provided !== SEND_SECRET) {
+        res.writeHead(401);
+        res.end(JSON.stringify({ ok: false, error: "unauthorized" }));
+        return;
+      }
+    }
+
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", async () => {
+      try {
+        const { chat_id, text, parse_mode } = JSON.parse(body);
+
+        if (!chat_id || !text) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ ok: false, error: "chat_id and text are required" }));
+          return;
+        }
+
+        const opts = {};
+        if (parse_mode) opts.parse_mode = parse_mode;
+
+        const result = await bot.telegram.sendMessage(chat_id, clip(text), opts);
+        console.log(`[send] chat_id=${chat_id} message_id=${result.message_id}`);
+        res.writeHead(200);
+        res.end(JSON.stringify({ ok: true, message_id: result.message_id }));
+
+      } catch (err) {
+        console.error(`[send] error: ${err.message}`);
+        res.writeHead(500);
+        res.end(JSON.stringify({ ok: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // ── 404 ──────────────────────────────────────────────────────────────────
+  res.writeHead(404);
+  res.end(JSON.stringify({ ok: false, error: "not found" }));
+});
+
+sendServer.listen(SEND_API_PORT, "0.0.0.0", () => {
+  console.log(`send API listening on :${SEND_API_PORT}`);
+});
+
 
 // ===== Launch =====
 async function start() {

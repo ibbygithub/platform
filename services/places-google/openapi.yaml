@@ -1,0 +1,332 @@
+openapi: 3.1.0
+info:
+  title: Platform Google Places Gateway
+  version: 1.0.0
+  description: |
+    Provides location search, place details, ratings, and photos via the
+    Google Places API (New). No caller API key required — GOOGLE_PLACES_API_KEY
+    is managed server-side on svcnode-01.
+
+    Known observability gap: app.py has no Loki push code. Logging is container
+    stdout only (captured by Grafana Alloy if configured).
+
+servers:
+  - url: https://places.platform.ibbytech.com
+    description: Traefik FQDN (primary)
+  - url: http://192.168.71.220
+    description: Direct IP fallback (LAN only, use if DNS fails)
+
+paths:
+
+  /health:
+    get:
+      summary: Health check
+      operationId: health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+  /v1/places/search_text:
+    post:
+      summary: Text search for places
+      description: |
+        Search for places using Google Places API textQuery (New API).
+        Requires lat/lng as a location bias anchor — results are ranked
+        by relevance within the specified radius.
+      operationId: searchText
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TextSearchRequest"
+            examples:
+              ramen_shinjuku:
+                summary: Ramen near Shinjuku Station
+                value:
+                  text_query: "ramen restaurant"
+                  lat: 35.6896
+                  lng: 139.7006
+                  radius_m: 2000
+                  max_results: 10
+                  language_code: "en"
+                  region_code: "JP"
+              izakaya_tokyo:
+                summary: Izakaya search with Japanese text
+                value:
+                  text_query: "居酒屋"
+                  lat: 35.6762
+                  lng: 139.6503
+                  radius_m: 5000
+                  max_results: 15
+                  language_code: "ja"
+                  region_code: "JP"
+      responses:
+        "200":
+          description: Places matching the text query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlacesResponse"
+        "400":
+          description: Missing required field (text_query or lat/lng)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Google API error or missing server-side API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/places/nearby:
+    post:
+      summary: Nearby search by place type
+      description: |
+        Search for places of specific type(s) near a lat/lng point.
+        Uses Google Places API searchNearby (New API).
+        `included_types` must match Google Place type identifiers.
+      operationId: nearbySearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NearbySearchRequest"
+            examples:
+              restaurants_near_shinjuku:
+                summary: Restaurants within 1km of Shinjuku
+                value:
+                  included_types: ["restaurant"]
+                  lat: 35.6896
+                  lng: 139.7006
+                  radius_m: 1000
+                  max_results: 10
+                  language_code: "en"
+                  region_code: "JP"
+              cafes_and_bakeries:
+                summary: Cafes and bakeries
+                value:
+                  included_types: ["cafe", "bakery"]
+                  lat: 35.6762
+                  lng: 139.6503
+                  radius_m: 500
+                  max_results: 5
+      responses:
+        "200":
+          description: Nearby places of the requested type(s)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlacesResponse"
+        "400":
+          description: Missing required field (included_types or lat/lng)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Google API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/places/photo:
+    get:
+      summary: Proxy a Google Places photo
+      description: |
+        Returns a Google Places photo without exposing the API key to the caller.
+        The `name` parameter is the photo resource name returned in the places
+        response (e.g. `places/ChIJ.../photos/AXCi2Q...`).
+        Response is the image binary (image/jpeg or image/png).
+      operationId: getPhoto
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Photo resource name from the places response
+          example: "places/ChIJN1t_tDeuEmsRUsoyG83frY4/photos/AXCi2Q..."
+        - name: maxHeightPx
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 600
+          description: Maximum height in pixels
+        - name: maxWidthPx
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 800
+          description: Maximum width in pixels
+      responses:
+        "200":
+          description: Image binary
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Missing `name` parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Google API error or photo not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+
+    TextSearchRequest:
+      type: object
+      required: [text_query, lat, lng]
+      properties:
+        text_query:
+          type: string
+          description: Free-text search query. Japanese/Unicode supported.
+        lat:
+          type: number
+          format: double
+          description: Latitude of the location bias anchor
+        lng:
+          type: number
+          format: double
+          description: Longitude of the location bias anchor
+        radius_m:
+          type: integer
+          default: 2500
+          description: Search radius in metres around lat/lng
+        max_results:
+          type: integer
+          default: 15
+          maximum: 20
+          description: Maximum number of places to return
+        region_code:
+          type: string
+          default: "JP"
+          description: ISO 3166-1 alpha-2 country code for result ranking
+        language_code:
+          type: string
+          default: "en"
+          description: BCP-47 language code for place names and addresses
+
+    NearbySearchRequest:
+      type: object
+      required: [included_types, lat, lng]
+      properties:
+        included_types:
+          type: array
+          items:
+            type: string
+          description: |
+            Google Place type identifiers (e.g. "restaurant", "cafe", "bar").
+            See: https://developers.google.com/maps/documentation/places/web-service/place-types
+          minItems: 1
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        radius_m:
+          type: integer
+          default: 2500
+          description: Search radius in metres (max 50000 for nearby search)
+        max_results:
+          type: integer
+          default: 15
+          maximum: 20
+        region_code:
+          type: string
+          default: "JP"
+        language_code:
+          type: string
+          default: "en"
+
+    PlaceRecord:
+      type: object
+      description: A single place from the Google Places New API response
+      properties:
+        id:
+          type: string
+          description: Google Places resource ID
+        displayName:
+          type: object
+          properties:
+            text:
+              type: string
+            languageCode:
+              type: string
+        formattedAddress:
+          type: string
+        location:
+          type: object
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+        rating:
+          type: number
+          nullable: true
+        userRatingCount:
+          type: integer
+          nullable: true
+        googleMapsUri:
+          type: string
+          nullable: true
+        photos:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Photo resource name — use with GET /v1/places/photo
+
+    PlacesResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        data:
+          type: object
+          properties:
+            places:
+              type: array
+              items:
+                $ref: "#/components/schemas/PlaceRecord"
+
+    ErrorResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: string

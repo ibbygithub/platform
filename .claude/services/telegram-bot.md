@@ -62,6 +62,39 @@ send_telegram_message(chat_id="YOUR_CHAT_ID", message="*Alert:* Task completed."
 - **Grafana Dashboard:** Not yet configured
 - Outbound message delivery and errors are logged
 
+## Capabilities
+
+Capability registry for Stage 2 Part B (Capability Pre-check).
+
+| Capability | Our Endpoint | Status | Last Verified |
+|:-----------|:-------------|:-------|:--------------|
+| Receive text messages from Telegram users | Bot polling / webhook | `implemented` | 2026-03-11 |
+| Receive location shares (initial + live) | Bot polling / webhook | `implemented` | 2026-03-11 |
+| Receive photos, documents, voice messages | Bot polling / webhook | `implemented` | 2026-03-11 |
+| Forward message to upstream URL as JSON envelope | gateway.js → UPSTREAM_URL | `implemented` | 2026-03-11 |
+| Reply to user if upstream returns reply_text | Auto-reply on upstream response | `implemented` | 2026-03-11 |
+| Allowlist filtering (user IDs + group IDs) | Env var config | `implemented` | 2026-03-11 |
+| Outbound send API (platform calls gateway to send) | Not exposed | `not-available` | 2026-03-11 |
+| Inbound webhook HTTP endpoint | Polling mode only (default) | `available-upstream` | 2026-03-11 |
+| Structured Loki logging | Not implemented | `not-available` | 2026-03-11 |
+
+**Architecture note:** The Telegram gateway is a receiving bot, not an outbound
+send API. To send messages programmatically, call the Telegram Bot API directly
+with the bot token, or implement an outbound send endpoint in a separate service.
+
+**Observability gap:** gateway.js has no Loki push code. Container stdout is the
+only log source. Adding Loki logging requires a Node.js Loki client library
+(separate task).
+
+**Upstream envelope schema:** See `services/telegram-gateway/openapi.yaml` for
+the full JSON schema that the gateway POSTs to UPSTREAM_URL on each message.
+
+**Last Updated:** 2026-03-11 — Platform Test Standard Phase 3 applied. Upstream
+envelope OpenAPI spec added. Validate script added at
+`services/telegram-gateway/validate_telegram.py`.
+
+---
+
 ## Known Limitations / Quirks
 - Telegram enforces a 30-message-per-second rate limit per bot
 - Long messages (>4096 characters) must be split before sending
