@@ -11,6 +11,8 @@ services:
     image: platform-places-google
     container_name: platform-places-google
     restart: unless-stopped
+    ports:
+      - "0.0.0.0:8081:8081"
 
     env_file:
       - ./.env
