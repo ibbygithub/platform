@@ -17,7 +17,7 @@ services:
       - ./.env
 
     ports:
-      - "127.0.0.1:8084:8084"
+      - "0.0.0.0:8084:8084"
 
     networks:
       - platform_net

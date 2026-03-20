@@ -21,6 +21,8 @@ services:
       dockerfile: Dockerfile
     image: platform-scraper-api
     container_name: platform-scraper-api
+    ports:
+      - "0.0.0.0:8083:8083"
     restart: unless-stopped
 
     environment:

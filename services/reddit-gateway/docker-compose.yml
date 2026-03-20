@@ -10,6 +10,8 @@ services:
       dockerfile: Dockerfile
     image: platform-reddit-gateway
     container_name: platform-reddit-gateway
+    ports:
+      - "0.0.0.0:8082:8082"
     restart: unless-stopped
 
     extra_hosts:
