@@ -152,6 +152,7 @@ def search(req: SearchRequest) -> Dict[str, Any]:
             "ok":           True,
             "query":        req.query,
             "results":      data.get("results", []),
+            "images":       data.get("images", []),
             "answer":       data.get("answer"),
             "response_time": data.get("response_time"),
         }
